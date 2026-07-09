@@ -141,3 +141,24 @@ describe("audit trail of auth events", () => {
     expect(res.statusCode).toBe(200);
   });
 });
+
+describe("login rate limiting", () => {
+  it("returns 429 after 5 attempts in a minute", async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/login",
+        payload: { username: "alice", password: "wrong" },
+      });
+      expect(res.statusCode).toBe(401);
+    }
+
+    const blocked = await app.inject({
+      method: "POST",
+      url: "/api/login",
+      payload: { username: "alice", password: "correct horse" },
+    });
+
+    expect(blocked.statusCode).toBe(429);
+  });
+});

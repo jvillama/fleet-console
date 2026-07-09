@@ -4,6 +4,7 @@ import Fastify, {
 } from "fastify";
 import cors from "@fastify/cors";
 import secureSession from "@fastify/secure-session";
+import rateLimit from "@fastify/rate-limit";
 import { containerRoutes } from "./routes/containers.js";
 import { authRoutes } from "./routes/auth.js";
 import { closeAudit, initAudit } from "./audit.js";
@@ -59,6 +60,8 @@ export async function buildApp(
       secure: process.env.FLEET_COOKIE_SECURE === "true",
     },
   });
+
+  await app.register(rateLimit, { global: false });
 
   initAudit(process.env.AUDIT_DB_PATH ?? "./data/audit.db");
   app.addHook("onClose", async () => closeAudit());

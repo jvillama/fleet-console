@@ -17,37 +17,41 @@ function audit(request: FastifyRequest, event: NewAuditEvent): void {
 }
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/api/login", async (request, reply) => {
-    const { username, password } = (request.body ?? {}) as Partial<LoginRequest>;
-    if (typeof username !== "string" || typeof password !== "string") {
-      const body: ApiError = { error: "username and password are required" };
-      return reply.code(400).send(body);
-    }
+  app.post(
+    "/api/login",
+    { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { username, password } = (request.body ?? {}) as Partial<LoginRequest>;
+      if (typeof username !== "string" || typeof password !== "string") {
+        const body: ApiError = { error: "username and password are required" };
+        return reply.code(400).send(body);
+      }
 
-    const user = authenticate(username, password, loadUsers());
-    if (!user) {
+      const user = authenticate(username, password, loadUsers());
+      if (!user) {
+        audit(request, {
+          actor: username,
+          role: null,
+          action: "auth.login_failed",
+          outcome: "failure",
+          ip: request.ip,
+        });
+        const body: ApiError = { error: "Invalid credentials" };
+        return reply.code(401).send(body);
+      }
+
+      request.session.set("user", user);
+      request.session.set("issuedAt", Date.now());
       audit(request, {
-        actor: username,
-        role: null,
-        action: "auth.login_failed",
-        outcome: "failure",
+        actor: user.username,
+        role: user.role,
+        action: "auth.login",
+        outcome: "success",
         ip: request.ip,
       });
-      const body: ApiError = { error: "Invalid credentials" };
-      return reply.code(401).send(body);
-    }
-
-    request.session.set("user", user);
-    request.session.set("issuedAt", Date.now());
-    audit(request, {
-      actor: user.username,
-      role: user.role,
-      action: "auth.login",
-      outcome: "success",
-      ip: request.ip,
-    });
-    return user;
-  });
+      return user;
+    },
+  );
 
   app.post("/api/logout", async (request, reply) => {
     const user = request.session.get("user");
