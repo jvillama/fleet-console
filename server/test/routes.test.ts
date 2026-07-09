@@ -16,7 +16,7 @@ const mocked = vi.mocked(dockerApi);
 let app: FastifyInstance;
 
 beforeEach(async () => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   app = await buildApp();
 });
 

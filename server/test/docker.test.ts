@@ -59,7 +59,7 @@ function mockStats(fixture: unknown): void {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 describe("listContainers", () => {
@@ -157,6 +157,22 @@ describe("getContainerStats", () => {
         cpu_stats: {
           cpu_usage: { total_usage: 200 },
           system_cpu_usage: 1000,
+          online_cpus: 2,
+        },
+      }),
+    );
+
+    const s = await getContainerStats("abc123");
+
+    expect(s.cpuPercent).toBe(0);
+  });
+
+  it("returns 0 cpuPercent when counters reset to a negative delta", async () => {
+    mockStats(
+      statsFixture({
+        cpu_stats: {
+          cpu_usage: { total_usage: 100 },
+          system_cpu_usage: 3000,
           online_cpus: 2,
         },
       }),
