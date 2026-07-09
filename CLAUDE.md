@@ -12,7 +12,9 @@ Two independent npm packages, no workspaces — run npm commands inside `server/
 ## Commands (run inside each package)
 
 - `npm run dev` — server: tsx watch on :4000; web: Vite on :5173 (dev server proxies `/api` to the server)
-- `npm run typecheck` — the only automated check; there is no linter or test suite yet
+- `npm run typecheck` — typechecks each package (server typecheck includes `test/`)
+- `npm test` — server only: Vitest suite in `server/test/`, no Docker daemon needed (dockerode is mocked). `npm run test:watch` for watch mode. No linter yet.
+- CI (`.github/workflows/ci.yml`) runs typecheck + tests + builds for both packages on pushes to `main` and PRs.
 - Full stack: `docker compose up --build`, then open http://localhost:8080. Requires a running Docker daemon.
 
 ## Gotchas
