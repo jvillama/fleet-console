@@ -45,3 +45,37 @@ export interface FleetOverview {
   dockerVersion: string;
   hostName: string;
 }
+
+// --- Auth + audit (mirrored in web/src/types.ts) -----------------------
+
+export type Role = "admin" | "operator" | "viewer";
+
+export interface SessionUser {
+  username: string;
+  role: Role;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface AuditEvent {
+  id: number;
+  ts: string; // ISO 8601 UTC
+  actor: string;
+  /** Null when the actor was unauthenticated (failed login attempt). */
+  role: Role | null;
+  /** Dotted verb, e.g. "auth.login", later "container.start". */
+  action: string;
+  /** Null for auth events; container id for Phase 2 container actions. */
+  target: string | null;
+  outcome: "success" | "failure";
+  ip: string | null;
+  detail: string | null;
+}
+
+export interface AuditPage {
+  events: AuditEvent[];
+  total: number;
+}

@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "hash-password": "tsx scripts/hash-password.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
