@@ -1,0 +1,270 @@
+/* Fleet Console — design tokens
+   Direction: a quiet ops room. Deep graphite-blue surface (not pure black),
+   restrained type in IBM Plex, and one signature element: physical-feeling
+   server LEDs. Everything else stays disciplined so the LEDs read as state,
+   not decoration. */
+
+:root {
+  --bg: #14181f;
+  --surface: #1b212b;
+  --surface-raised: #222a36;
+  --line: #2c3644;
+  --text: #d6dde6;
+  --text-dim: #8593a3;
+  --led-ok: #4ade80;
+  --led-warn: #fbbf24;
+  --led-down: #f87171;
+  --led-paused: #60a5fa;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px 24px 16px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Top bar */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.host {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.counters {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+}
+
+.counter {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 14px;
+  min-width: 84px;
+}
+
+.counter dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.counter dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.counter dd.ok {
+  color: var(--led-ok);
+}
+
+.counter dd.down {
+  color: var(--text-dim);
+}
+
+/* Error banner */
+.banner {
+  background: color-mix(in srgb, var(--led-down) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--led-down) 40%, var(--line));
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+/* Fleet table */
+main {
+  flex: 1;
+}
+
+.fleet {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.fleet th,
+.fleet td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.fleet thead th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: var(--surface-raised);
+}
+
+.fleet tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.fleet tbody tr:hover {
+  background: var(--surface-raised);
+}
+
+.row-down {
+  color: var(--text-dim);
+}
+
+.name {
+  display: block;
+  font-weight: 500;
+}
+
+.short-id,
+.image,
+.ports,
+.num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.short-id {
+  color: var(--text-dim);
+}
+
+.image {
+  color: var(--text-dim);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+th.num {
+  text-align: right;
+}
+
+/* Signature: server rack LEDs */
+.led {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #3a4452;
+}
+
+.led-ok {
+  background: var(--led-ok);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--led-ok) 70%, transparent);
+}
+
+.led-warn {
+  background: var(--led-warn);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--led-warn) 70%, transparent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.led-down {
+  background: var(--led-down);
+  opacity: 0.75;
+}
+
+.led-paused {
+  background: var(--led-paused);
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .led-warn {
+    animation: none;
+  }
+}
+
+/* Empty state */
+.empty {
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.empty-hint code {
+  font-family: var(--font-mono);
+  background: var(--surface-raised);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Status line */
+.statusline {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .fleet .image,
+  .fleet .ports {
+    display: none;
+  }
+  .fleet th:nth-child(3),
+  .fleet th:nth-child(5) {
+    display: none;
+  }
+}

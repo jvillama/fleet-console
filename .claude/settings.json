@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/types-reminder.mjs",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/typecheck.mjs",
+            "timeout": 120,
+            "statusMessage": "Typechecking edited package..."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+services:
+  server:
+    build: ./server
+    environment:
+      NODE_ENV: production
+    volumes:
+      # Read-only Docker socket: the console can observe the host's
+      # containers. Phase 2 (start/stop actions) will need :rw — a good
+      # security tradeoff to discuss in the README.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+  web:
+    build: ./web
+    ports:
+      - "8080:80"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  # --- demo fleet -----------------------------------------------------
+  # A couple of throwaway containers so the dashboard has something to
+  # show on first run. Delete this section when pointing at a real host.
+  demo-nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+
+  demo-redis:
+    image: redis:alpine
+    restart: unless-stopped
