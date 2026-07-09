@@ -8,7 +8,7 @@ import { containerRoutes } from "./routes/containers.js";
 import { authRoutes } from "./routes/auth.js";
 import { closeAudit, initAudit } from "./audit.js";
 import { pingDocker } from "./docker.js";
-import type { SessionUser } from "./types.js";
+import type { ApiError, SessionUser } from "./types.js";
 
 declare module "@fastify/secure-session" {
   interface SessionData {
@@ -20,6 +20,11 @@ declare module "@fastify/secure-session" {
 export interface BuildAppOptions {
   logger?: FastifyServerOptions["logger"];
 }
+
+/** /api paths reachable without a session. */
+const OPEN_API_PATHS = new Set(["/api/health", "/api/login"]);
+
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 /**
  * Builds the Fastify app with all routes registered, but not listening —
@@ -57,6 +62,25 @@ export async function buildApp(
 
   initAudit(process.env.AUDIT_DB_PATH ?? "./data/audit.db");
   app.addHook("onClose", async () => closeAudit());
+
+  // Auth gate: every /api route except the open set requires a valid,
+  // unexpired session. New routes are therefore protected by default.
+  app.addHook("onRequest", async (request, reply) => {
+    const path = request.url.split("?")[0] ?? "";
+    if (!path.startsWith("/api/") || OPEN_API_PATHS.has(path)) return;
+
+    const user = request.session.get("user");
+    const issuedAt = request.session.get("issuedAt");
+    if (
+      !user ||
+      typeof issuedAt !== "number" ||
+      Date.now() - issuedAt > SESSION_TTL_MS
+    ) {
+      request.session.delete();
+      const body: ApiError = { error: "Unauthorized" };
+      return reply.code(401).send(body);
+    }
+  });
 
   app.get("/api/health", async () => {
     const dockerReachable = await pingDocker();

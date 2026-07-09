@@ -10,18 +10,67 @@ vi.mock("../src/docker.js", () => ({
 
 import * as dockerApi from "../src/docker.js";
 import { buildApp } from "../src/app.js";
+import { loginAs } from "./helpers.js";
 
 const mocked = vi.mocked(dockerApi);
 
 let app: FastifyInstance;
+let cookies: { session: string };
 
 beforeEach(async () => {
   vi.resetAllMocks();
   app = await buildApp();
+  cookies = await loginAs(app);
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await app.close();
+});
+
+describe("auth gate", () => {
+  it.each(["/api/overview", "/api/containers", "/api/containers/abc123/stats"])(
+    "rejects %s without a session",
+    async (url) => {
+      const res = await app.inject({ url });
+
+      expect(res.statusCode).toBe(401);
+      expect(res.json()).toEqual({ error: "Unauthorized" });
+    },
+  );
+
+  it("leaves /api/health open", async () => {
+    mocked.pingDocker.mockResolvedValue(true);
+
+    const res = await app.inject({ url: "/api/health" });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("rejects an expired session", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-07-09T08:00:00Z"));
+    const oldCookies = await loginAs(app);
+
+    vi.setSystemTime(new Date("2026-07-09T16:00:01Z")); // 8h + 1s later
+    const res = await app.inject({ url: "/api/overview", cookies: oldCookies });
+
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("accepts a session younger than the TTL", async () => {
+    mocked.getFleetOverview.mockResolvedValue({
+      total: 0,
+      running: 0,
+      stopped: 0,
+      dockerVersion: "27.1.1",
+      hostName: "docker-host",
+    });
+
+    const res = await app.inject({ url: "/api/overview", cookies });
+
+    expect(res.statusCode).toBe(200);
+  });
 });
 
 describe("GET /api/health", () => {
@@ -62,7 +111,7 @@ describe("GET /api/containers", () => {
     };
     mocked.listContainers.mockResolvedValue([summary]);
 
-    const res = await app.inject({ url: "/api/containers" });
+    const res = await app.inject({ url: "/api/containers", cookies });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual([summary]);
@@ -80,7 +129,7 @@ describe("GET /api/overview", () => {
     };
     mocked.getFleetOverview.mockResolvedValue(overview);
 
-    const res = await app.inject({ url: "/api/overview" });
+    const res = await app.inject({ url: "/api/overview", cookies });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual(overview);
@@ -99,14 +148,14 @@ describe("GET /api/containers/:id/stats", () => {
     };
     mocked.getContainerStats.mockResolvedValue(stats);
 
-    const res = await app.inject({ url: "/api/containers/abc123/stats" });
+    const res = await app.inject({ url: "/api/containers/abc123/stats", cookies });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual(stats);
   });
 
   it("rejects ids with unexpected characters before touching Docker", async () => {
-    const res = await app.inject({ url: "/api/containers/bad$id/stats" });
+    const res = await app.inject({ url: "/api/containers/bad$id/stats", cookies });
 
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: "Invalid container id" });
@@ -118,7 +167,7 @@ describe("GET /api/containers/:id/stats", () => {
       Object.assign(new Error("no such container"), { statusCode: 404 }),
     );
 
-    const res = await app.inject({ url: "/api/containers/deadbeef/stats" });
+    const res = await app.inject({ url: "/api/containers/deadbeef/stats", cookies });
 
     expect(res.statusCode).toBe(404);
     expect(res.json()).toEqual({
@@ -130,7 +179,7 @@ describe("GET /api/containers/:id/stats", () => {
   it("maps other Docker failures to a 502 response", async () => {
     mocked.getContainerStats.mockRejectedValue(new Error("socket hang up"));
 
-    const res = await app.inject({ url: "/api/containers/abc123/stats" });
+    const res = await app.inject({ url: "/api/containers/abc123/stats", cookies });
 
     expect(res.statusCode).toBe(502);
     expect(res.json()).toEqual({
