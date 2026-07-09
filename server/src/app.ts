@@ -7,6 +7,7 @@ import secureSession from "@fastify/secure-session";
 import rateLimit from "@fastify/rate-limit";
 import { containerRoutes } from "./routes/containers.js";
 import { authRoutes } from "./routes/auth.js";
+import { auditRoutes } from "./routes/audit.js";
 import { closeAudit, initAudit } from "./audit.js";
 import { pingDocker } from "./docker.js";
 import type { ApiError, SessionUser } from "./types.js";
@@ -95,6 +96,7 @@ export async function buildApp(
   });
 
   await app.register(authRoutes);
+  await app.register(auditRoutes);
   await app.register(containerRoutes);
 
   return app;
