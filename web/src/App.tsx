@@ -121,7 +121,11 @@ function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }
             )}
           </main>
           {selected && (
-            <LogPanel container={selected} onClose={() => setSelected(null)} />
+            <LogPanel
+              key={selected.id}
+              container={selected}
+              onClose={() => setSelected(null)}
+            />
           )}
         </>
       ) : (
