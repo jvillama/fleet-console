@@ -1,22 +1,75 @@
 import { useEffect, useRef, useState } from "react";
 import type {
+  AuditPage,
   ContainerStats,
   ContainerSummary,
   FleetOverview,
+  SessionUser,
 } from "./types";
 
-async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(path);
+let onUnauthorized: (() => void) | null = null;
+
+/** Called whenever an API request returns 401 — the app flips to the login screen. */
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, init);
+  if (res.status === 401) {
+    onUnauthorized?.();
+    throw new Error(`${path} → HTTP 401`);
+  }
   if (!res.ok) {
     throw new Error(`${path} → HTTP ${res.status}`);
   }
+  if (res.status === 204) {
+    return undefined as T;
+  }
   return res.json() as Promise<T>;
+}
+
+function getJson<T>(path: string): Promise<T> {
+  return request<T>(path);
 }
 
 export const api = {
   overview: () => getJson<FleetOverview>("/api/overview"),
   containers: () => getJson<ContainerSummary[]>("/api/containers"),
   stats: (id: string) => getJson<ContainerStats>(`/api/containers/${id}/stats`),
+
+  /** Throws with the server's error message (e.g. "Invalid credentials"). */
+  login: async (username: string, password: string): Promise<SessionUser> => {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error ?? `Login failed (HTTP ${res.status})`);
+    }
+    return res.json() as Promise<SessionUser>;
+  },
+
+  logout: () => request<void>("/api/logout", { method: "POST" }),
+
+  /** Session probe: null means "not logged in" (never an error, never the 401 handler). */
+  me: async (): Promise<SessionUser | null> => {
+    const res = await fetch("/api/me");
+    if (res.status === 401) return null;
+    if (!res.ok) throw new Error(`/api/me → HTTP ${res.status}`);
+    return res.json() as Promise<SessionUser>;
+  },
+
+  audit: (params: { limit?: number; offset?: number; actor?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (params.limit !== undefined) qs.set("limit", String(params.limit));
+    if (params.offset !== undefined) qs.set("offset", String(params.offset));
+    if (params.actor) qs.set("actor", params.actor);
+    if (params.action) qs.set("action", params.action);
+    return getJson<AuditPage>(`/api/audit?${qs.toString()}`);
+  },
 };
 
 export interface Polled<T> {
