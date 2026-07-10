@@ -105,10 +105,10 @@ FLEET_USERS=[{"username":"alice","role":"admin","passwordHash":"scrypt:…"}]
 Roles (`admin` / `operator` / `viewer`) are stored on the session and audit
 rows but not yet enforced — enforcement lands with Phase 2 actions.
 
-Every login, failed login, and logout is recorded in a SQLite audit log
-(compose persists it in the `audit-data` volume) and is browsable from the
-**Audit log** tab in the UI. `GET /api/audit` serves it with pagination and
-`actor`/`action` filters.
+Every login, failed login, logout, and log-stream open is recorded in a
+SQLite audit log (compose persists it in the `audit-data` volume) and is
+browsable from the **Audit log** tab in the UI. `GET /api/audit` serves it
+with pagination and `actor`/`action` filters.
 
 ## API
 
@@ -122,12 +122,14 @@ Every login, failed login, and logout is recorded in a SQLite audit log
 | `GET /api/containers` | session | All containers (including stopped) |
 | `GET /api/containers/:id/stats` | session | One-shot CPU/memory sample |
 | `GET /api/audit` | session | Paginated audit events (`limit`, `offset`, `actor`, `action`) |
+| `WS /api/logs/:id` | session | Live container log stream (tail 200, then follow) |
 
 ## Roadmap
 
 - [x] **Phase 1 — visibility:** container list, states, CPU/memory, overview strip
 - [x] **Phase 1.5 — auth + audit:** named-user login, session cookie, SQLite audit log with UI viewer
-- [ ] **Phase 2 — actions:** start/stop/restart from the UI; live log streaming over WebSockets; socket mounted `rw`; role enforcement; mutating actions audited **fail-closed**
+- [x] **Phase 1.75 — live logs:** per-container log streaming over WebSockets, session-gated and audited
+- [ ] **Phase 2 — actions:** start/stop/restart from the UI; socket mounted `rw`; role enforcement; mutating actions audited **fail-closed**
 - [ ] **Phase 3 — deployment workflow:** pick an image tag, roll out to a container group, watch health, one-click rollback; CI/CD via GitHub Actions (lint → typecheck → build → push image → deploy)
 - [ ] **Polish:** shared types package, web-package tests, README demo GIF
 
