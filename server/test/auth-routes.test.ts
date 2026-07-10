@@ -129,6 +129,18 @@ describe("audit trail of auth events", () => {
     expect(page.events[0]).toMatchObject({ actor: "alice", outcome: "success" });
   });
 
+  it("records the forwarded client IP, not the proxy's (trustProxy)", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/api/login",
+      headers: { "x-forwarded-for": "203.0.113.9" },
+      payload: { username: "alice", password: "wrong" },
+    });
+
+    const page = queryEvents({ limit: 10, offset: 0 });
+    expect(page.events[0]?.ip).toBe("203.0.113.9");
+  });
+
   it("fails open: login still succeeds when the audit write fails", async () => {
     closeAudit();
 

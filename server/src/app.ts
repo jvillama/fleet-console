@@ -40,7 +40,14 @@ export async function buildApp(
     throw new Error("FLEET_SESSION_SECRET must be set to at least 32 characters");
   }
 
-  const app = Fastify({ logger: opts.logger ?? false });
+  const app = Fastify({
+    logger: opts.logger ?? false,
+    // The compose nginx proxy is the sole ingress, so X-Forwarded-For is
+    // trustworthy; rate limiting and audit IPs need the real client address.
+    // Never expose this server directly — the header is client-spoofable
+    // without a trusted proxy in front.
+    trustProxy: true,
+  });
 
   // In production the frontend is served from the same origin (or behind
   // the same reverse proxy), so CORS is only open for local dev.

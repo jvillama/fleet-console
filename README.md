@@ -141,4 +141,6 @@ an audit log of auth events. Before Phase 2 lands, mutating endpoints must
 enforce roles and fail closed when the audit write fails (see the design
 spec). The stack still serves plain HTTP — put TLS in front (and set
 `FLEET_COOKIE_SECURE=true`) before exposing port 8080 beyond a trusted
-network.
+network. The server trusts `X-Forwarded-For` (`trustProxy`) because the
+bundled nginx is the sole ingress — don't publish the server container's
+port directly, or clients could spoof the rate-limit key and audit IPs.
