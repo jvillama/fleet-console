@@ -141,6 +141,20 @@ describe("audit trail of auth events", () => {
     expect(page.events[0]?.ip).toBe("203.0.113.9");
   });
 
+  it("ignores client-forged X-Forwarded-For prefixes (one trusted hop)", async () => {
+    // nginx appends the real client to any client-sent header, producing
+    // "<forged>, <real>" — only the rightmost entry may be trusted.
+    await app.inject({
+      method: "POST",
+      url: "/api/login",
+      headers: { "x-forwarded-for": "6.6.6.6, 203.0.113.9" },
+      payload: { username: "alice", password: "wrong" },
+    });
+
+    const page = queryEvents({ limit: 10, offset: 0 });
+    expect(page.events[0]?.ip).toBe("203.0.113.9");
+  });
+
   it("fails open: login still succeeds when the audit write fails", async () => {
     closeAudit();
 

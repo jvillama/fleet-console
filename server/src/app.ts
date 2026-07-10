@@ -42,11 +42,13 @@ export async function buildApp(
 
   const app = Fastify({
     logger: opts.logger ?? false,
-    // The compose nginx proxy is the sole ingress, so X-Forwarded-For is
-    // trustworthy; rate limiting and audit IPs need the real client address.
-    // Never expose this server directly — the header is client-spoofable
-    // without a trusted proxy in front.
-    trustProxy: true,
+    // The compose nginx proxy is the sole ingress; rate limiting and audit
+    // IPs need the real client address. Trust exactly one hop: nginx APPENDS
+    // to X-Forwarded-For, so only the rightmost entry (the one nginx added)
+    // is trustworthy — trusting the whole chain would let clients spoof
+    // their IP by sending their own X-Forwarded-For prefix. Never expose
+    // this server directly, bypassing the proxy.
+    trustProxy: 1,
   });
 
   // In production the frontend is served from the same origin (or behind
