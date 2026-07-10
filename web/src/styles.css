@@ -469,3 +469,104 @@ th.num {
   opacity: 0.5;
   cursor: default;
 }
+
+/* Clickable fleet rows (open the log panel) */
+.fleet tbody tr {
+  cursor: pointer;
+}
+
+/* Log slide-over panel */
+.log-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 40vw;
+  min-width: 480px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+  z-index: 20;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.log-header .name {
+  display: block;
+}
+
+.log-status {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+
+.log-status-streaming {
+  color: var(--led-ok);
+}
+
+.log-status-disconnected {
+  color: var(--led-down);
+}
+
+.log-close {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 9px;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.log-close:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
+.log-lines {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.log-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-empty {
+  color: var(--text-dim);
+}
+
+.log-jump {
+  position: absolute;
+  bottom: 16px;
+  right: 24px;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}

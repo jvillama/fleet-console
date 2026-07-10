@@ -5,9 +5,11 @@ import Fastify, {
 import cors from "@fastify/cors";
 import secureSession from "@fastify/secure-session";
 import rateLimit from "@fastify/rate-limit";
+import websocket from "@fastify/websocket";
 import { containerRoutes } from "./routes/containers.js";
 import { authRoutes } from "./routes/auth.js";
 import { auditRoutes } from "./routes/audit.js";
+import { logsRoutes } from "./routes/logs.js";
 import { closeAudit, initAudit } from "./audit.js";
 import { pingDocker } from "./docker.js";
 import type { ApiError, SessionUser } from "./types.js";
@@ -72,6 +74,7 @@ export async function buildApp(
   });
 
   await app.register(rateLimit, { global: false });
+  await app.register(websocket);
 
   initAudit(process.env.AUDIT_DB_PATH ?? "./data/audit.db");
   app.addHook("onClose", async () => closeAudit());
@@ -107,6 +110,7 @@ export async function buildApp(
   await app.register(authRoutes);
   await app.register(auditRoutes);
   await app.register(containerRoutes);
+  await app.register(logsRoutes);
 
   return app;
 }

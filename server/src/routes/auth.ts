@@ -8,7 +8,7 @@ import type { ApiError, LoginRequest } from "../types.js";
  * logged but never blocks the request. Phase 2 mutating endpoints must
  * fail closed instead (refuse the action when the audit write fails).
  */
-function audit(request: FastifyRequest, event: NewAuditEvent): void {
+export function auditFailOpen(request: FastifyRequest, event: NewAuditEvent): void {
   try {
     recordEvent(event);
   } catch (err) {
@@ -29,7 +29,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
       const user = authenticate(username, password, loadUsers());
       if (!user) {
-        audit(request, {
+        auditFailOpen(request, {
           actor: username,
           role: null,
           action: "auth.login_failed",
@@ -42,7 +42,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
       request.session.set("user", user);
       request.session.set("issuedAt", Date.now());
-      audit(request, {
+      auditFailOpen(request, {
         actor: user.username,
         role: user.role,
         action: "auth.login",
@@ -57,7 +57,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const user = request.session.get("user");
     request.session.delete();
     if (user) {
-      audit(request, {
+      auditFailOpen(request, {
         actor: user.username,
         role: user.role,
         action: "auth.logout",

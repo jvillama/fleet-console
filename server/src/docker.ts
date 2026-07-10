@@ -1,4 +1,5 @@
 import Docker from "dockerode";
+import { PassThrough } from "node:stream";
 import type {
   ContainerState,
   ContainerStats,
@@ -125,4 +126,49 @@ export async function pingDocker(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export interface LogStream {
+  stream: NodeJS.ReadableStream;
+  close: () => void;
+}
+
+/**
+ * Live log stream for one container: last `tail` lines, then follow.
+ * TTY containers emit plain text; non-TTY containers use Docker's
+ * multiplexed framing, which is demuxed here so callers always get text.
+ * close() destroys the daemon connection so it stops following.
+ */
+export async function streamContainerLogs(
+  id: string,
+  opts: { tail: number },
+): Promise<LogStream> {
+  const container = docker.getContainer(id);
+  const info = await container.inspect();
+  const source = await container.logs({
+    follow: true,
+    stdout: true,
+    stderr: true,
+    tail: opts.tail,
+  });
+
+  const close = (): void => {
+    (source as unknown as { destroy?: () => void }).destroy?.();
+  };
+
+  if (info.Config.Tty) {
+    return { stream: source, close };
+  }
+
+  const demuxed = new PassThrough();
+  docker.modem.demuxStream(source, demuxed, demuxed);
+  source.on("end", () => demuxed.end());
+  source.on("error", (err) => demuxed.destroy(err as Error));
+  return {
+    stream: demuxed,
+    close: () => {
+      close();
+      demuxed.destroy();
+    },
+  };
 }

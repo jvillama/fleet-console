@@ -54,7 +54,13 @@ function useFleetStats(
   return stats;
 }
 
-export function FleetTable({ containers }: { containers: ContainerSummary[] }) {
+export function FleetTable({
+  containers,
+  onSelect,
+}: {
+  containers: ContainerSummary[];
+  onSelect: (container: ContainerSummary) => void;
+}) {
   const stats = useFleetStats(containers);
 
   if (containers.length === 0) {
@@ -86,7 +92,11 @@ export function FleetTable({ containers }: { containers: ContainerSummary[] }) {
         {containers.map((c) => {
           const s = stats[c.id];
           return (
-            <tr key={c.id} className={c.state !== "running" ? "row-down" : ""}>
+            <tr
+              key={c.id}
+              className={c.state !== "running" ? "row-down" : ""}
+              onClick={() => onSelect(c)}
+            >
               <td>
                 <StatusLed state={c.state} />
               </td>

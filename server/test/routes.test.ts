@@ -6,6 +6,7 @@ vi.mock("../src/docker.js", () => ({
   getFleetOverview: vi.fn(),
   listContainers: vi.fn(),
   pingDocker: vi.fn(),
+  streamContainerLogs: vi.fn(),
 }));
 
 import * as dockerApi from "../src/docker.js";
