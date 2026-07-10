@@ -54,9 +54,10 @@ export interface ContainerActionResult {
 Stays the only module touching dockerode. Three additions:
 
 ```ts
-startContainer(id: string): Promise<ContainerState>
-stopContainer(id: string): Promise<ContainerState>
-restartContainer(id: string): Promise<ContainerState>
+startContainer(id: string): Promise<ActionOutcome>
+stopContainer(id: string): Promise<ActionOutcome>
+restartContainer(id: string): Promise<ActionOutcome>
+// ActionOutcome = { state: ContainerState; noOp: boolean }  (server-internal, not mirrored)
 ```
 
 - Thin wrappers over `container.start() / stop() / restart()`, each
@@ -66,15 +67,15 @@ restartContainer(id: string): Promise<ContainerState>
   timeout knob in this slice.
 - Docker's "already in that state" response (HTTP 304 from start on a
   running container, or stop on a stopped one) is **success**: the
-  desired state holds. The wrapper swallows the 304 and still inspects;
-  callers can't tell a no-op from a change except via the returned state.
+  desired state holds. The wrapper swallows the 304, still inspects, and
+  reports `noOp: true` so the route can note it in the audit detail.
 
 ### Authorization — `server/src/authz.ts` (new)
 
 Small role-gate helper, following the one-module-per-concern pattern:
 
 ```ts
-requireRole(min: Role): preHandler
+requireRole(min: Role, audit: { action: string }): preHandler
 // role order: viewer < operator < admin
 ```
 
@@ -82,10 +83,11 @@ requireRole(min: Role): preHandler
   `app.ts` has already guaranteed it exists and is unexpired).
 - On insufficient role: respond `403 { error: "Forbidden" }` **and
   record an audit event** (`outcome: "failure"`, `detail: "forbidden"`,
-  action/target as the route would have used) — a viewer probing
-  mutation endpoints is exactly what an audit log is for. This denial
-  write is fail-open (log and continue): the action was refused anyway,
-  so there is nothing to close against.
+  `action` from the `audit` argument — `registerAction` passes e.g.
+  `"container.stop"` — and `target` from `request.params.id`) — a
+  viewer probing mutation endpoints is exactly what an audit log is
+  for. This denial write is fail-open (log and continue): the action
+  was refused anyway, so there is nothing to close against.
 - The global session gate in `app.ts` is untouched.
 
 ### Fail-closed audit — `server/src/audit.ts`
