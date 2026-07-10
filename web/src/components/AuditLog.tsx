@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { AuditEvent } from "../types";
 
@@ -11,8 +11,10 @@ export function AuditLog() {
   const [action, setAction] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const requestSeq = useRef(0);
 
   async function load(offset: number, replace: boolean) {
+    const seq = ++requestSeq.current;
     setLoading(true);
     setError(null);
     try {
@@ -22,12 +24,14 @@ export function AuditLog() {
         ...(actor ? { actor } : {}),
         ...(action ? { action } : {}),
       });
+      if (seq !== requestSeq.current) return;
       setTotal(page.total);
       setEvents((prev) => (replace ? page.events : [...prev, ...page.events]));
     } catch (err) {
+      if (seq !== requestSeq.current) return;
       setError(err instanceof Error ? err.message : "Failed to load audit log");
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }
 
