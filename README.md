@@ -103,7 +103,9 @@ FLEET_USERS=[{"username":"alice","role":"admin","passwordHash":"scrypt:…"}]
 | `FLEET_COOKIE_SECURE` | Set the cookie's `Secure` flag (enable behind TLS) | `false` |
 
 Roles (`admin` / `operator` / `viewer`) are stored on the session and audit
-rows but not yet enforced — enforcement lands with Phase 2 actions.
+rows but not yet enforced — enforcement lands with Phase 2 actions. That
+means any authenticated user, whatever their role, can currently read any
+container's logs and the audit log.
 
 Every login, failed login, logout, and log-stream open is recorded in a
 SQLite audit log (compose persists it in the `audit-data` volume) and is
