@@ -31,7 +31,10 @@ export type Route =
 
 /**
  * Installs a global fetch stub. Routes match by URL prefix, first match
- * wins. Plain objects are wrapped in a fresh 200 JSON Response on every
+ * wins — beware overlapping prefixes: they resolve in insertion order, so
+ * list most-specific first (e.g. "/api/containers/x/stats" before
+ * "/api/containers", or the list route swallows the stats request).
+ * Plain objects are wrapped in a fresh 200 JSON Response on every
  * call (safe for polling); a raw Response is one-shot (its body can only
  * be read once); a function gets full control (deferred responses, per-call
  * status changes). Unmatched URLs throw, failing the test loudly.
