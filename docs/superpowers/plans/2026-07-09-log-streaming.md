@@ -144,6 +144,17 @@ describe("streamContainerLogs", () => {
 
     expect(source.destroyed).toBe(true);
   });
+
+  it("close() tears down both the source and the demuxed stream (non-TTY)", async () => {
+    const { source } = mockLogsContainer(false);
+    mockClient.modem.demuxStream.mockImplementation(() => {});
+
+    const result = await streamContainerLogs("abc123", { tail: 200 });
+    result.close();
+
+    expect(source.destroyed).toBe(true);
+    expect((result.stream as PassThrough).destroyed).toBe(true);
+  });
 });
 ```
 
@@ -199,7 +210,15 @@ export async function streamContainerLogs(
   docker.modem.demuxStream(source, demuxed, demuxed);
   source.on("end", () => demuxed.end());
   source.on("error", (err) => demuxed.destroy(err as Error));
-  return { stream: demuxed, close };
+  return {
+    stream: demuxed,
+    // Destroying source alone emits no "end", which would leave the
+    // demuxed stream callers hold dangling — tear down both.
+    close: () => {
+      close();
+      demuxed.destroy();
+    },
+  };
 }
 ```
 
