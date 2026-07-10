@@ -144,3 +144,9 @@ export function formatBytes(bytes: number): string {
   );
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
+
+/** Same-origin WebSocket URL for a container's live log stream. */
+export function logsSocketUrl(id: string): string {
+  const proto = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${proto}://${window.location.host}/api/logs/${id}`;
+}

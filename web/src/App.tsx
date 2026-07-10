@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { api, setUnauthorizedHandler, usePolling } from "./api";
 import { AuditLog } from "./components/AuditLog";
 import { FleetTable } from "./components/FleetTable";
+import { LogPanel } from "./components/LogPanel";
 import { LoginForm } from "./components/LoginForm";
-import type { SessionUser } from "./types";
+import type { ContainerSummary, SessionUser } from "./types";
 
 const POLL_MS = 5000;
 
@@ -38,6 +39,7 @@ export default function App() {
 
 function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
   const [view, setView] = useState<"dashboard" | "audit">("dashboard");
+  const [selected, setSelected] = useState<ContainerSummary | null>(null);
   const overview = usePolling(api.overview, POLL_MS);
   const containers = usePolling(api.containers, POLL_MS);
 
@@ -70,7 +72,10 @@ function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }
           </button>
           <button
             className={view === "audit" ? "tab active" : "tab"}
-            onClick={() => setView("audit")}
+            onClick={() => {
+              setView("audit");
+              setSelected(null);
+            }}
           >
             Audit log
           </button>
@@ -112,9 +117,12 @@ function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }
                 <p>Loading fleet…</p>
               </div>
             ) : (
-              <FleetTable containers={containers.data ?? []} />
+              <FleetTable containers={containers.data ?? []} onSelect={setSelected} />
             )}
           </main>
+          {selected && (
+            <LogPanel container={selected} onClose={() => setSelected(null)} />
+          )}
         </>
       ) : (
         <main>
