@@ -119,7 +119,13 @@ describe("streamContainerLogs", () => {
 
   it("ends the demuxed stream when the source ends", async () => {
     const { source } = mockLogsContainer(false);
-    mockClient.modem.demuxStream.mockImplementation(() => {});
+    // The mock must consume the source: a readable only emits "end" once
+    // drained (in production docker-modem does the consuming).
+    mockClient.modem.demuxStream.mockImplementation(
+      (src: NodeJS.ReadableStream, out: NodeJS.WritableStream) => {
+        src.on("data", (c: Buffer) => out.write(c));
+      },
+    );
 
     const result = await streamContainerLogs("abc123", { tail: 200 });
     const ended = new Promise<void>((resolve) =>
