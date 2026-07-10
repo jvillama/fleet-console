@@ -825,7 +825,11 @@ and render the panel inside the dashboard branch, after `</main>` (still inside 
 
 ```tsx
 {selected && (
-  <LogPanel container={selected} onClose={() => setSelected(null)} />
+  <LogPanel
+    key={selected.id} // remount per container: scopes socket handlers to one instance
+    container={selected}
+    onClose={() => setSelected(null)}
+  />
 )}
 ```
 
