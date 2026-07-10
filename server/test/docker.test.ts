@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PassThrough } from "node:stream";
 
 // docker.ts creates its dockerode client at module load, so the mock must
 // intercept the constructor before ../src/docker.js is imported.
@@ -8,6 +9,7 @@ const mockClient = vi.hoisted(() => ({
   version: vi.fn(),
   info: vi.fn(),
   ping: vi.fn(),
+  modem: { demuxStream: vi.fn() },
 }));
 
 vi.mock("dockerode", () => ({
@@ -21,6 +23,7 @@ import {
   getFleetOverview,
   listContainers,
   pingDocker,
+  streamContainerLogs,
 } from "../src/docker.js";
 
 function rawContainer(overrides: Record<string, unknown> = {}) {
@@ -265,5 +268,80 @@ describe("pingDocker", () => {
     mockClient.ping.mockRejectedValue(new Error("connect ENOENT"));
 
     expect(await pingDocker()).toBe(false);
+  });
+});
+
+describe("streamContainerLogs", () => {
+  function mockLogsContainer(tty: boolean) {
+    const source = new PassThrough();
+    const logs = vi.fn().mockResolvedValue(source);
+    mockClient.getContainer.mockReturnValue({
+      inspect: vi.fn().mockResolvedValue({ Config: { Tty: tty } }),
+      logs,
+    });
+    return { source, logs };
+  }
+
+  it("passes the raw stream through for TTY containers and forwards options", async () => {
+    const { source, logs } = mockLogsContainer(true);
+
+    const result = await streamContainerLogs("abc123", { tail: 200 });
+
+    expect(logs).toHaveBeenCalledWith({
+      follow: true,
+      stdout: true,
+      stderr: true,
+      tail: 200,
+    });
+    expect(mockClient.modem.demuxStream).not.toHaveBeenCalled();
+
+    const chunks: string[] = [];
+    result.stream.on("data", (c: Buffer) => chunks.push(c.toString()));
+    source.write("hello\n");
+    await new Promise((r) => setImmediate(r));
+    expect(chunks.join("")).toBe("hello\n");
+  });
+
+  it("demuxes non-TTY containers into one plain stream", async () => {
+    const { source } = mockLogsContainer(false);
+    // Simulate docker-modem: forward the source into the stdout writable.
+    mockClient.modem.demuxStream.mockImplementation(
+      (src: NodeJS.ReadableStream, out: NodeJS.WritableStream) => {
+        src.on("data", (c: Buffer) => out.write(c));
+      },
+    );
+
+    const result = await streamContainerLogs("abc123", { tail: 200 });
+
+    expect(mockClient.modem.demuxStream).toHaveBeenCalledTimes(1);
+    expect(mockClient.modem.demuxStream.mock.calls[0]?.[0]).toBe(source);
+
+    const chunks: string[] = [];
+    result.stream.on("data", (c: Buffer) => chunks.push(c.toString()));
+    source.write("demuxed line\n");
+    await new Promise((r) => setImmediate(r));
+    expect(chunks.join("")).toBe("demuxed line\n");
+  });
+
+  it("ends the demuxed stream when the source ends", async () => {
+    const { source } = mockLogsContainer(false);
+    mockClient.modem.demuxStream.mockImplementation(() => {});
+
+    const result = await streamContainerLogs("abc123", { tail: 200 });
+    const ended = new Promise<void>((resolve) =>
+      result.stream.on("end", () => resolve()),
+    );
+    result.stream.on("data", () => {}); // start flowing so "end" can fire
+    source.end();
+    await ended; // test fails by timeout if end never propagates
+  });
+
+  it("close() destroys the underlying source stream", async () => {
+    const { source } = mockLogsContainer(true);
+
+    const result = await streamContainerLogs("abc123", { tail: 200 });
+    result.close();
+
+    expect(source.destroyed).toBe(true);
   });
 });
