@@ -3,11 +3,18 @@ services:
     build: ./server
     environment:
       NODE_ENV: production
+      # Both required — compose reads them from a .env file next to this
+      # file or from the shell. See README "Authentication & audit log".
+      FLEET_SESSION_SECRET: ${FLEET_SESSION_SECRET:?set FLEET_SESSION_SECRET (32+ chars) in .env}
+      FLEET_USERS: ${FLEET_USERS:?set FLEET_USERS (JSON array) in .env}
+      AUDIT_DB_PATH: /data/audit.db
+      FLEET_COOKIE_SECURE: ${FLEET_COOKIE_SECURE:-false}
     volumes:
       # Read-only Docker socket: the console can observe the host's
       # containers. Phase 2 (start/stop actions) will need :rw — a good
       # security tradeoff to discuss in the README.
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - audit-data:/data
     restart: unless-stopped
 
   web:
@@ -28,3 +35,6 @@ services:
   demo-redis:
     image: redis:alpine
     restart: unless-stopped
+
+volumes:
+  audit-data:

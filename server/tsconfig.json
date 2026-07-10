@@ -13,5 +13,5 @@
     "forceConsistentCasingInFileNames": true,
     "sourceMap": true
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "scripts"]
 }

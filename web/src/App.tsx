@@ -1,11 +1,54 @@
-import { api, usePolling } from "./api";
+import { useEffect, useState } from "react";
+import { api, setUnauthorizedHandler, usePolling } from "./api";
+import { AuditLog } from "./components/AuditLog";
 import { FleetTable } from "./components/FleetTable";
+import { LoginForm } from "./components/LoginForm";
+import type { SessionUser } from "./types";
 
 const POLL_MS = 5000;
 
 export default function App() {
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => setUser(null));
+    api
+      .me()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setAuthChecked(true));
+    return () => setUnauthorizedHandler(null);
+  }, []);
+
+  if (!authChecked) {
+    return (
+      <div className="shell">
+        <div className="empty">
+          <p>Checking session…</p>
+        </div>
+      </div>
+    );
+  }
+  if (!user) {
+    return <LoginForm onLogin={setUser} />;
+  }
+  return <Console user={user} onLogout={() => setUser(null)} />;
+}
+
+function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
+  const [view, setView] = useState<"dashboard" | "audit">("dashboard");
   const overview = usePolling(api.overview, POLL_MS);
   const containers = usePolling(api.containers, POLL_MS);
+
+  async function handleLogout() {
+    try {
+      await api.logout();
+    } catch {
+      // The session may already be gone — logging out locally either way.
+    }
+    onLogout();
+  }
 
   return (
     <div className="shell">
@@ -18,6 +61,20 @@ export default function App() {
               : "connecting to host…"}
           </p>
         </div>
+        <nav className="tabs">
+          <button
+            className={view === "dashboard" ? "tab active" : "tab"}
+            onClick={() => setView("dashboard")}
+          >
+            Dashboard
+          </button>
+          <button
+            className={view === "audit" ? "tab active" : "tab"}
+            onClick={() => setView("audit")}
+          >
+            Audit log
+          </button>
+        </nav>
         <dl className="counters">
           <div className="counter">
             <dt>Running</dt>
@@ -32,24 +89,38 @@ export default function App() {
             <dd>{overview.data?.total ?? "–"}</dd>
           </div>
         </dl>
+        <div className="session">
+          <span className="session-user">{user.username}</span>
+          <button className="logout" onClick={() => void handleLogout()}>
+            Log out
+          </button>
+        </div>
       </header>
 
-      {containers.error && (
-        <div className="banner" role="alert">
-          Can’t reach the Fleet Console API ({containers.error}). Check that
-          the server is running and has access to the Docker socket.
-        </div>
-      )}
+      {view === "dashboard" ? (
+        <>
+          {containers.error && (
+            <div className="banner" role="alert">
+              Can’t reach the Fleet Console API ({containers.error}). Check that
+              the server is running and has access to the Docker socket.
+            </div>
+          )}
 
-      <main>
-        {containers.loading ? (
-          <div className="empty">
-            <p>Loading fleet…</p>
-          </div>
-        ) : (
-          <FleetTable containers={containers.data ?? []} />
-        )}
-      </main>
+          <main>
+            {containers.loading ? (
+              <div className="empty">
+                <p>Loading fleet…</p>
+              </div>
+            ) : (
+              <FleetTable containers={containers.data ?? []} />
+            )}
+          </main>
+        </>
+      ) : (
+        <main>
+          <AuditLog />
+        </main>
+      )}
 
       <footer className="statusline">
         <span>
@@ -58,7 +129,7 @@ export default function App() {
             ? ` · last update ${containers.lastUpdated.toLocaleTimeString()}`
             : ""}
         </span>
-        <span>fleet-console v0.1 · phase 1: read-only</span>
+        <span>fleet-console v0.2 · observe-only · authenticated</span>
       </footer>
     </div>
   );
