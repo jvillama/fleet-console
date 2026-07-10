@@ -1,11 +1,52 @@
-import { api, usePolling } from "./api";
+import { useEffect, useState } from "react";
+import { api, setUnauthorizedHandler, usePolling } from "./api";
 import { FleetTable } from "./components/FleetTable";
+import { LoginForm } from "./components/LoginForm";
+import type { SessionUser } from "./types";
 
 const POLL_MS = 5000;
 
 export default function App() {
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => setUser(null));
+    api
+      .me()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setAuthChecked(true));
+    return () => setUnauthorizedHandler(null);
+  }, []);
+
+  if (!authChecked) {
+    return (
+      <div className="shell">
+        <div className="empty">
+          <p>Checking session…</p>
+        </div>
+      </div>
+    );
+  }
+  if (!user) {
+    return <LoginForm onLogin={setUser} />;
+  }
+  return <Console user={user} onLogout={() => setUser(null)} />;
+}
+
+function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
   const overview = usePolling(api.overview, POLL_MS);
   const containers = usePolling(api.containers, POLL_MS);
+
+  async function handleLogout() {
+    try {
+      await api.logout();
+    } catch {
+      // The session may already be gone — logging out locally either way.
+    }
+    onLogout();
+  }
 
   return (
     <div className="shell">
@@ -32,6 +73,12 @@ export default function App() {
             <dd>{overview.data?.total ?? "–"}</dd>
           </div>
         </dl>
+        <div className="session">
+          <span className="session-user">{user.username}</span>
+          <button className="logout" onClick={() => void handleLogout()}>
+            Log out
+          </button>
+        </div>
       </header>
 
       {containers.error && (
@@ -58,7 +105,7 @@ export default function App() {
             ? ` · last update ${containers.lastUpdated.toLocaleTimeString()}`
             : ""}
         </span>
-        <span>fleet-console v0.1 · phase 1: read-only</span>
+        <span>fleet-console v0.2 · observe-only · authenticated</span>
       </footer>
     </div>
   );
