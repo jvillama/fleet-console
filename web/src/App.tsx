@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, setUnauthorizedHandler, usePolling } from "./api";
+import { AuditLog } from "./components/AuditLog";
 import { FleetTable } from "./components/FleetTable";
 import { LoginForm } from "./components/LoginForm";
 import type { SessionUser } from "./types";
@@ -36,6 +37,7 @@ export default function App() {
 }
 
 function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
+  const [view, setView] = useState<"dashboard" | "audit">("dashboard");
   const overview = usePolling(api.overview, POLL_MS);
   const containers = usePolling(api.containers, POLL_MS);
 
@@ -59,6 +61,20 @@ function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }
               : "connecting to host…"}
           </p>
         </div>
+        <nav className="tabs">
+          <button
+            className={view === "dashboard" ? "tab active" : "tab"}
+            onClick={() => setView("dashboard")}
+          >
+            Dashboard
+          </button>
+          <button
+            className={view === "audit" ? "tab active" : "tab"}
+            onClick={() => setView("audit")}
+          >
+            Audit log
+          </button>
+        </nav>
         <dl className="counters">
           <div className="counter">
             <dt>Running</dt>
@@ -81,22 +97,30 @@ function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }
         </div>
       </header>
 
-      {containers.error && (
-        <div className="banner" role="alert">
-          Can’t reach the Fleet Console API ({containers.error}). Check that
-          the server is running and has access to the Docker socket.
-        </div>
-      )}
+      {view === "dashboard" ? (
+        <>
+          {containers.error && (
+            <div className="banner" role="alert">
+              Can’t reach the Fleet Console API ({containers.error}). Check that
+              the server is running and has access to the Docker socket.
+            </div>
+          )}
 
-      <main>
-        {containers.loading ? (
-          <div className="empty">
-            <p>Loading fleet…</p>
-          </div>
-        ) : (
-          <FleetTable containers={containers.data ?? []} />
-        )}
-      </main>
+          <main>
+            {containers.loading ? (
+              <div className="empty">
+                <p>Loading fleet…</p>
+              </div>
+            ) : (
+              <FleetTable containers={containers.data ?? []} />
+            )}
+          </main>
+        </>
+      ) : (
+        <main>
+          <AuditLog />
+        </main>
+      )}
 
       <footer className="statusline">
         <span>
