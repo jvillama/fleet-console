@@ -1,14 +1,16 @@
 # ---- build stage ----
-FROM node:22-alpine AS build
+# node:22-slim (glibc), not alpine: better-sqlite3 and sodium-native ship
+# prebuilt glibc binaries; musl would compile from source in both stages.
+FROM node:22-slim AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
-COPY tsconfig.json ./
+COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN npm run build
 
 # ---- runtime stage ----
-FROM node:22-alpine
+FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package*.json ./
