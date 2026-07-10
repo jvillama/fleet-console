@@ -164,5 +164,11 @@ export async function streamContainerLogs(
   docker.modem.demuxStream(source, demuxed, demuxed);
   source.on("end", () => demuxed.end());
   source.on("error", (err) => demuxed.destroy(err as Error));
-  return { stream: demuxed, close };
+  return {
+    stream: demuxed,
+    close: () => {
+      close();
+      demuxed.destroy();
+    },
+  };
 }
