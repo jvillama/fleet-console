@@ -13,7 +13,7 @@ Two independent npm packages, no workspaces — run npm commands inside `server/
 
 - `npm run dev` — server: tsx watch on :4000; web: Vite on :5173 (dev server proxies `/api` to the server)
 - `npm run typecheck` — typechecks each package (server typecheck includes `test/`)
-- `npm test` — server only: Vitest suite in `server/test/`, no Docker daemon needed (dockerode is mocked). `npm run test:watch` for watch mode. No linter yet.
+- `npm test` — Vitest in both packages: `server/test/` (no Docker daemon needed — dockerode is mocked) and `web/test/` (jsdom + React Testing Library; `fetch`/`WebSocket` stubbed at the boundary via `web/test/helpers.ts`, never module-mock `../src/api`). `npm run test:watch` for watch mode. No linter yet.
 - CI (`.github/workflows/ci.yml`) runs typecheck + tests + builds for both packages on pushes to `main` and PRs.
 - Full stack: `docker compose up --build`, then open http://localhost:8080. Requires a running Docker daemon.
 
@@ -27,3 +27,4 @@ Two independent npm packages, no workspaces — run npm commands inside `server/
 - All `/api/*` routes except `/api/health` and `/api/login` require a session — the `onRequest` gate in `app.ts` protects new routes by default. In tests, log in with `loginAs()` from `test/helpers.ts` and pass its result as `cookies:` to `app.inject`. Test env (secret, users, `:memory:` audit DB) is seeded by `test/setup.ts` via `vitest.config.ts`.
 - Audit policy: this slice fails open (log + continue) when an audit write fails; Phase 2 mutating endpoints must fail closed. Don't "fix" the fail-open behavior in auth routes.
 - `GET /api/logs/:id` is a WebSocket route (`@fastify/websocket`); the session gate covers the upgrade request. In tests, drive it with `app.injectWS(path, { headers: { cookie: \`session=${cookies.session}\` } })` — see `test/logs-routes.test.ts`. The nginx and Vite proxies are WS-aware; if you add another WS route, no proxy changes are needed.
+- CI runs npm 10 (Node 22), which rejects `package-lock.json` files written by npm 11+ (missing nested entries, platform packages recorded non-optional → `EBADPLATFORM`). After any dependency change, regenerate the lock with CI's npm and validate the same way: `rm -rf node_modules package-lock.json && npx -y npm@10.9.8 install && npx -y npm@10.9.8 ci`.
