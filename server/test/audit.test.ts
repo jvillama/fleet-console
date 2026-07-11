@@ -4,6 +4,7 @@ import {
   initAudit,
   queryEvents,
   recordEvent,
+  updateEventOutcome,
 } from "../src/audit.js";
 
 beforeEach(() => {
@@ -92,5 +93,52 @@ describe("recordEvent / queryEvents", () => {
     record("alice");
     initAudit(":memory:");
     expect(queryEvents({ limit: 10, offset: 0 }).total).toBe(0);
+  });
+});
+
+describe("recordEvent return value / updateEventOutcome", () => {
+  it("recordEvent returns the inserted row id", () => {
+    const first = recordEvent({
+      actor: "alice", role: "admin", action: "container.stop",
+      outcome: "failure", detail: "incomplete", target: "abc123",
+    });
+    const second = recordEvent({
+      actor: "alice", role: "admin", action: "container.stop",
+      outcome: "failure", detail: "incomplete", target: "abc123",
+    });
+
+    expect(first).toBe(1);
+    expect(second).toBe(2);
+  });
+
+  it("rewrites outcome and clears detail when none is given", () => {
+    const id = recordEvent({
+      actor: "alice", role: "admin", action: "container.stop",
+      outcome: "failure", detail: "incomplete", target: "abc123",
+    });
+
+    updateEventOutcome(id, "success");
+
+    const [event] = queryEvents({ limit: 1, offset: 0 }).events;
+    expect(event).toMatchObject({ outcome: "success", detail: null });
+  });
+
+  it("stores the new detail when given", () => {
+    const id = recordEvent({
+      actor: "alice", role: "admin", action: "container.start",
+      outcome: "failure", detail: "incomplete", target: "abc123",
+    });
+
+    updateEventOutcome(id, "success", "no-op: already in desired state");
+
+    const [event] = queryEvents({ limit: 1, offset: 0 }).events;
+    expect(event).toMatchObject({
+      outcome: "success",
+      detail: "no-op: already in desired state",
+    });
+  });
+
+  it("throws for a missing row id", () => {
+    expect(() => updateEventOutcome(999, "success")).toThrow(/not found/);
   });
 });
