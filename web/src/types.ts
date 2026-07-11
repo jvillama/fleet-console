@@ -80,7 +80,7 @@ export interface AuditPage {
   total: number;
 }
 
-// --- Container actions (Phase 2, mirrored in web/src/types.ts) ---------
+// --- Container actions (Phase 2, mirrored in server/src/types.ts) ------
 
 export type ContainerAction = "start" | "stop" | "restart";
 
