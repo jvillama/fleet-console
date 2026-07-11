@@ -79,3 +79,14 @@ export interface AuditPage {
   events: AuditEvent[];
   total: number;
 }
+
+// --- Container actions (Phase 2, mirrored in server/src/types.ts) ------
+
+export type ContainerAction = "start" | "stop" | "restart";
+
+export interface ContainerActionResult {
+  id: string;
+  action: ContainerAction;
+  /** Container state after the action, from a post-action inspect. */
+  state: ContainerState;
+}

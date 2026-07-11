@@ -23,6 +23,9 @@ import {
   getFleetOverview,
   listContainers,
   pingDocker,
+  restartContainer,
+  startContainer,
+  stopContainer,
   streamContainerLogs,
 } from "../src/docker.js";
 
@@ -360,5 +363,82 @@ describe("streamContainerLogs", () => {
 
     expect(source.destroyed).toBe(true);
     expect((result.stream as PassThrough).destroyed).toBe(true);
+  });
+});
+
+describe("container actions", () => {
+  function mockActionContainer(overrides: Record<string, unknown> = {}) {
+    const container = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+      restart: vi.fn().mockResolvedValue(undefined),
+      inspect: vi.fn().mockResolvedValue({ State: { Status: "running" } }),
+      ...overrides,
+    };
+    mockClient.getContainer.mockReturnValue(container);
+    return container;
+  }
+
+  it("startContainer starts and returns the post-action state", async () => {
+    const container = mockActionContainer();
+
+    const outcome = await startContainer("abc123");
+
+    expect(mockClient.getContainer).toHaveBeenCalledWith("abc123");
+    expect(container.start).toHaveBeenCalledTimes(1);
+    expect(outcome).toEqual({ state: "running", noOp: false });
+  });
+
+  it("stopContainer stops and returns the post-action state", async () => {
+    const container = mockActionContainer({
+      inspect: vi.fn().mockResolvedValue({ State: { Status: "exited" } }),
+    });
+
+    const outcome = await stopContainer("abc123");
+
+    expect(container.stop).toHaveBeenCalledTimes(1);
+    expect(outcome).toEqual({ state: "exited", noOp: false });
+  });
+
+  it("restartContainer restarts and returns the post-action state", async () => {
+    const container = mockActionContainer();
+
+    const outcome = await restartContainer("abc123");
+
+    expect(container.restart).toHaveBeenCalledTimes(1);
+    expect(outcome).toEqual({ state: "running", noOp: false });
+  });
+
+  it("treats Docker's 304 (already in desired state) as a successful no-op", async () => {
+    mockActionContainer({
+      start: vi.fn().mockRejectedValue(
+        Object.assign(new Error("container already started"), { statusCode: 304 }),
+      ),
+    });
+
+    const outcome = await startContainer("abc123");
+
+    expect(outcome).toEqual({ state: "running", noOp: true });
+  });
+
+  it("propagates non-304 errors without inspecting", async () => {
+    const container = mockActionContainer({
+      stop: vi.fn().mockRejectedValue(
+        Object.assign(new Error("no such container"), { statusCode: 404 }),
+      ),
+    });
+
+    await expect(stopContainer("deadbeef")).rejects.toThrow("no such container");
+    expect(container.inspect).not.toHaveBeenCalled();
+  });
+
+  it("maps an unknown inspect status to dead", async () => {
+    mockActionContainer({
+      inspect: vi.fn().mockResolvedValue({ State: { Status: "glitched" } }),
+    });
+
+    const outcome = await startContainer("abc123");
+
+    expect(outcome.state).toBe("dead");
   });
 });

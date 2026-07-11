@@ -4,7 +4,7 @@ An internal operations dashboard for a Docker container fleet. Treats the
 containers on a host like machines in a small data center: one screen showing
 what's up, what's down, and what each machine is consuming — refreshed live.
 
-> **Status: Phase 1.5 (read-only visibility + auth & audit log).** See [Roadmap](#roadmap).
+> **Status: Phase 2 (container actions: start/stop/restart, role-gated, audited fail-closed).** See [Roadmap](#roadmap).
 
 ![screenshot placeholder — add a demo GIF here after first run]
 
@@ -26,7 +26,7 @@ pipelines.
 │  polls 5s    │        │  proxies same-    │        │ dockerode      │
 └──────────────┘        │  origin API       │        └───────┬────────┘
                         └───────────────────┘                │ unix socket
-                                                             ▼ (read-only)
+                                                             ▼ (read-write)
                                                     /var/run/docker.sock
 ```
 
@@ -44,7 +44,7 @@ pipelines.
 
 | Decision | Why |
 |---|---|
-| Docker socket mounted **read-only** | Phase 1 only observes. Actions (Phase 2) will require `rw` — kept out until there's auth in front of it. |
+| Docker socket mounted **read-write** | Phase 2 actions need it. Mitigations: session + role gate on every mutating route, fail-closed audit, nginx as sole ingress. The console can stop itself — documented, not guarded. |
 | Polling, not WebSockets | For a fleet of dozens, a 5 s poll is simpler and plenty. Live log streaming in Phase 2 is where WebSockets actually earn their complexity. |
 | nginx same-origin proxy in prod | No CORS surface in production; CORS is enabled only for local dev. |
 | Stats fetched per-container, `Promise.allSettled` | One unhealthy container can't break the whole table — each row degrades to "—". |
@@ -125,25 +125,31 @@ with pagination and `actor`/`action` filters.
 | `GET /api/containers/:id/stats` | session | One-shot CPU/memory sample |
 | `GET /api/audit` | session | Paginated audit events (`limit`, `offset`, `actor`, `action`) |
 | `WS /api/logs/:id` | session | Live container log stream (tail 200, then follow) |
+| `POST /api/containers/:id/start` | session + operator | Start a container |
+| `POST /api/containers/:id/stop` | session + operator | Stop a container (10s grace) |
+| `POST /api/containers/:id/restart` | session + operator | Restart a container |
 
 ## Roadmap
 
 - [x] **Phase 1 — visibility:** container list, states, CPU/memory, overview strip
 - [x] **Phase 1.5 — auth + audit:** named-user login, session cookie, SQLite audit log with UI viewer
 - [x] **Phase 1.75 — live logs:** per-container log streaming over WebSockets, session-gated and audited
-- [ ] **Phase 2 — actions:** start/stop/restart from the UI; socket mounted `rw`; role enforcement; mutating actions audited **fail-closed**
+- [x] **Phase 2 — actions:** start/stop/restart from the UI; socket mounted `rw`; role enforcement; mutating actions audited **fail-closed**
 - [ ] **Phase 3 — deployment workflow:** pick an image tag, roll out to a container group, watch health, one-click rollback; CI/CD via GitHub Actions (lint → typecheck → build → push image → deploy)
 - [ ] **Polish:** shared types package, web-package tests, README demo GIF
 
 ## Security notes
 
 Mounting the Docker socket into a container is equivalent to root on the
-host — that's why Phase 1 mounts it read-only and the app has no mutating
-endpoints. The console now requires a named-user login (scrypt-hashed
-passwords, encrypted HttpOnly session cookie, rate-limited login) and keeps
-an audit log of auth events. Before Phase 2 lands, mutating endpoints must
-enforce roles and fail closed when the audit write fails (see the design
-spec). The stack still serves plain HTTP — put TLS in front (and set
+host. Phase 1 mounted it read-only; Phase 2 (container actions) mounts it
+read-write, so the console itself is now a high-value target. Mitigations:
+every mutating route requires an operator or admin session (viewers are
+read-only), and every action attempt is audited **fail-closed** — if the
+audit write fails, the action is refused with a 503. One deliberate
+footgun: the console can stop its own containers from its own dashboard,
+exactly as `docker stop` could; there is no self-protection guard, so
+operators should treat the fleet-console rows with the same care as a
+terminal. The stack still serves plain HTTP — put TLS in front (and set
 `FLEET_COOKIE_SECURE=true`) before exposing port 8080 beyond a trusted
 network. The server trusts `X-Forwarded-For` (`trustProxy`) because the
 bundled nginx is the sole ingress — don't publish the server container's

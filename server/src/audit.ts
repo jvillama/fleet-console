@@ -63,8 +63,8 @@ function requireDb(): Database.Database {
   return db;
 }
 
-export function recordEvent(event: NewAuditEvent): void {
-  requireDb()
+export function recordEvent(event: NewAuditEvent): number {
+  const result = requireDb()
     .prepare(
       `INSERT INTO audit_events (ts, actor, role, action, target, outcome, ip, detail)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -79,6 +79,7 @@ export function recordEvent(event: NewAuditEvent): void {
       event.ip ?? null,
       event.detail ?? null,
     );
+  return Number(result.lastInsertRowid);
 }
 
 export function queryEvents(q: AuditQuery): AuditPage {
@@ -106,4 +107,22 @@ export function queryEvents(q: AuditQuery): AuditPage {
     )
     .all({ ...params, limit: q.limit, offset: q.offset }) as AuditEvent[];
   return { events, total };
+}
+
+/**
+ * Rewrites a previously inserted event's outcome (and detail). Used by the
+ * fail-closed insert-then-update pattern: mutating routes insert the row as
+ * a provisional failure before acting, then settle it here afterwards.
+ */
+export function updateEventOutcome(
+  id: number,
+  outcome: "success" | "failure",
+  detail?: string,
+): void {
+  const result = requireDb()
+    .prepare(`UPDATE audit_events SET outcome = ?, detail = ? WHERE id = ?`)
+    .run(outcome, detail ?? null, id);
+  if (result.changes === 0) {
+    throw new Error(`audit event ${id} not found`);
+  }
 }

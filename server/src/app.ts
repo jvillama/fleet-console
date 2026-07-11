@@ -9,6 +9,7 @@ import websocket from "@fastify/websocket";
 import { containerRoutes } from "./routes/containers.js";
 import { authRoutes } from "./routes/auth.js";
 import { auditRoutes } from "./routes/audit.js";
+import { actionRoutes } from "./routes/actions.js";
 import { logsRoutes } from "./routes/logs.js";
 import { closeAudit, initAudit } from "./audit.js";
 import { pingDocker } from "./docker.js";
@@ -110,6 +111,7 @@ export async function buildApp(
   await app.register(authRoutes);
   await app.register(auditRoutes);
   await app.register(containerRoutes);
+  await app.register(actionRoutes);
   await app.register(logsRoutes);
 
   return app;

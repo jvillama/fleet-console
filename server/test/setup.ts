@@ -7,6 +7,7 @@ process.env.AUDIT_DB_PATH = ":memory:";
 process.env.FLEET_USERS = JSON.stringify([
   { username: "alice", role: "admin", passwordHash: hashPassword("correct horse") },
   { username: "bob", role: "viewer", passwordHash: hashPassword("battery staple") },
+  { username: "carol", role: "operator", passwordHash: hashPassword("staple correct") },
 ]);
 delete process.env.FLEET_USERS_FILE;
 delete process.env.FLEET_COOKIE_SECURE;

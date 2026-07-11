@@ -118,6 +118,48 @@ export async function getFleetOverview(): Promise<FleetOverview> {
   };
 }
 
+export interface ActionOutcome {
+  /** Container state after the action, from a fresh inspect. */
+  state: ContainerState;
+  /** True when Docker answered 304 — it was already in the desired state. */
+  noOp: boolean;
+}
+
+/**
+ * Shared body for the three mutating actions. Docker answers HTTP 304
+ * ("not modified") when the container is already in the desired state —
+ * the desired state holds, so that is success, flagged as a no-op for the
+ * audit detail. Any other error propagates to the route's error mapping.
+ */
+async function runAction(
+  id: string,
+  act: (container: Docker.Container) => Promise<unknown>,
+): Promise<ActionOutcome> {
+  const container = docker.getContainer(id);
+  let noOp = false;
+  try {
+    await act(container);
+  } catch (err) {
+    if ((err as { statusCode?: number }).statusCode === 304) noOp = true;
+    else throw err;
+  }
+  const info = await container.inspect();
+  return { state: toState(info.State.Status), noOp };
+}
+
+export function startContainer(id: string): Promise<ActionOutcome> {
+  return runAction(id, (c) => c.start());
+}
+
+export function stopContainer(id: string): Promise<ActionOutcome> {
+  // Docker's default 10s SIGTERM grace period — no timeout knob this slice.
+  return runAction(id, (c) => c.stop());
+}
+
+export function restartContainer(id: string): Promise<ActionOutcome> {
+  return runAction(id, (c) => c.restart());
+}
+
 /** Used by /api/health to report whether the Docker socket is reachable. */
 export async function pingDocker(): Promise<boolean> {
   try {

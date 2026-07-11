@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type {
   AuditPage,
+  ContainerAction,
+  ContainerActionResult,
   ContainerStats,
   ContainerSummary,
   FleetOverview,
@@ -37,6 +39,10 @@ export const api = {
   overview: () => getJson<FleetOverview>("/api/overview"),
   containers: () => getJson<ContainerSummary[]>("/api/containers"),
   stats: (id: string) => getJson<ContainerStats>(`/api/containers/${id}/stats`),
+  containerAction: (id: string, action: ContainerAction) =>
+    request<ContainerActionResult>(`/api/containers/${id}/${action}`, {
+      method: "POST",
+    }),
 
   /** Throws with the server's error message (e.g. "Invalid credentials"). */
   login: async (username: string, password: string): Promise<SessionUser> => {

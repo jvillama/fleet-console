@@ -117,7 +117,11 @@ function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }
                 <p>Loading fleet…</p>
               </div>
             ) : (
-              <FleetTable containers={containers.data ?? []} onSelect={setSelected} />
+              <FleetTable
+                containers={containers.data ?? []}
+                role={user.role}
+                onSelect={setSelected}
+              />
             )}
           </main>
           {selected && (
@@ -141,7 +145,7 @@ function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }
             ? ` · last update ${containers.lastUpdated.toLocaleTimeString()}`
             : ""}
         </span>
-        <span>fleet-console v0.2 · observe-only · authenticated</span>
+        <span>fleet-console v0.3 · authenticated · actions audited</span>
       </footer>
     </div>
   );
