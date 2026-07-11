@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { FleetTable } from "../src/components/FleetTable";
@@ -37,7 +37,7 @@ function rowFor(name: string): HTMLElement {
 
 describe("FleetTable", () => {
   it("renders the empty state when there are no containers", () => {
-    render(<FleetTable containers={[]} onSelect={vi.fn()} />);
+    render(<FleetTable containers={[]} role="viewer" onSelect={vi.fn()} />);
 
     expect(screen.getByText("No containers on this host yet.")).toBeInTheDocument();
   });
@@ -58,7 +58,7 @@ describe("FleetTable", () => {
       status: "Exited (0) 2 days ago",
     });
 
-    render(<FleetTable containers={[running, stopped]} onSelect={vi.fn()} />);
+    render(<FleetTable containers={[running, stopped]} role="viewer" onSelect={vi.fn()} />);
 
     expect(await screen.findByText("2.5%")).toBeInTheDocument();
     const runningRow = rowFor("web-1");
@@ -80,7 +80,7 @@ describe("FleetTable", () => {
     const ok = container({});
     const broken = container({ id: "run2", shortId: "run2short000", name: "web-2" });
 
-    render(<FleetTable containers={[ok, broken]} onSelect={vi.fn()} />);
+    render(<FleetTable containers={[ok, broken]} role="viewer" onSelect={vi.fn()} />);
 
     expect(await screen.findByText("2.5%")).toBeInTheDocument();
     const brokenRow = rowFor("web-2");
@@ -93,9 +93,118 @@ describe("FleetTable", () => {
     const onSelect = vi.fn();
     const c = container({});
 
-    render(<FleetTable containers={[c]} onSelect={onSelect} />);
+    render(<FleetTable containers={[c]} role="viewer" onSelect={onSelect} />);
     await user.click(screen.getByText("web-1"));
 
     expect(onSelect).toHaveBeenCalledWith(c);
+  });
+});
+
+describe("FleetTable actions", () => {
+  const actionResult = { id: "dead1", action: "start", state: "running" };
+
+  function stopped(overrides: Partial<ContainerSummary> = {}): ContainerSummary {
+    return container({
+      id: "dead1",
+      shortId: "dead1short00",
+      name: "worker-1",
+      state: "exited",
+      status: "Exited (0) 2 days ago",
+      ...overrides,
+    });
+  }
+
+  it("viewers see no action buttons", () => {
+    render(<FleetTable containers={[stopped()]} role="viewer" onSelect={vi.fn()} />);
+
+    expect(screen.queryByRole("button", { name: /start|stop|restart/i })).toBeNull();
+  });
+
+  it("operators see Start on stopped rows, Stop and Restart on running rows", async () => {
+    stubFetch({ "/api/containers/run1/stats": jsonResponse(statsFixture) });
+
+    render(
+      <FleetTable
+        containers={[container({}), stopped()]}
+        role="operator"
+        onSelect={vi.fn()}
+      />,
+    );
+
+    const runningRow = rowFor("web-1");
+    expect(within(runningRow).getByRole("button", { name: "Stop" })).toBeInTheDocument();
+    expect(within(runningRow).getByRole("button", { name: "Restart" })).toBeInTheDocument();
+    expect(within(runningRow).queryByRole("button", { name: "Start" })).toBeNull();
+
+    const stoppedRow = rowFor("worker-1");
+    expect(within(stoppedRow).getByRole("button", { name: "Start" })).toBeInTheDocument();
+    expect(within(stoppedRow).queryByRole("button", { name: "Stop" })).toBeNull();
+  });
+
+  it("Start fires immediately, POSTs, and updates the row state", async () => {
+    const { calls } = stubFetch({ "/api/containers/dead1/start": actionResult });
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+
+    render(<FleetTable containers={[stopped()]} role="admin" onSelect={onSelect} />);
+    await user.click(screen.getByRole("button", { name: "Start" }));
+
+    const post = calls.find((c) => c.url === "/api/containers/dead1/start");
+    expect(post?.init?.method).toBe("POST");
+    // Row reflects the returned state without waiting for the next poll.
+    expect(await screen.findByRole("img", { name: "running" })).toBeInTheDocument();
+    // The button click must not bubble into row selection (log panel).
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("Stop requires a second confirming click", async () => {
+    const { calls } = stubFetch({
+      "/api/containers/run1/stats": jsonResponse(statsFixture),
+      "/api/containers/run1/stop": { id: "run1", action: "stop", state: "exited" },
+    });
+    const user = userEvent.setup();
+
+    render(<FleetTable containers={[container({})]} role="operator" onSelect={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "Stop" }));
+    expect(screen.getByRole("button", { name: "Confirm stop?" })).toBeInTheDocument();
+    expect(calls.some((c) => c.url === "/api/containers/run1/stop")).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Confirm stop?" }));
+    expect(calls.some((c) => c.url === "/api/containers/run1/stop")).toBe(true);
+    expect(await screen.findByRole("img", { name: "exited" })).toBeInTheDocument();
+  });
+
+  it("the confirm state reverts after the timeout", async () => {
+    stubFetch({ "/api/containers/run1/stats": jsonResponse(statsFixture) });
+    vi.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    render(<FleetTable containers={[container({})]} role="operator" onSelect={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "Stop" }));
+    expect(screen.getByRole("button", { name: "Confirm stop?" })).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+
+    expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it("a failed action shows an inline error on that row only", async () => {
+    stubFetch({
+      "/api/containers/dead1/start": jsonResponse({ error: "Action failed" }, 502),
+    });
+    const user = userEvent.setup();
+
+    render(<FleetTable containers={[stopped()]} role="admin" onSelect={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Start" }));
+
+    const row = rowFor("worker-1");
+    expect(await within(row).findByText(/HTTP 502/)).toBeInTheDocument();
+    // No global banner — the table itself stays rendered.
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

@@ -570,3 +570,46 @@ th.num {
   font-size: 12px;
   cursor: pointer;
 }
+
+/* --- Row actions (Phase 2) ------------------------------------------ */
+
+.actions-cell {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.row-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.action {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) {
+  border-color: var(--text-dim);
+}
+
+.action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.action.confirm {
+  color: var(--led-warn);
+  border-color: var(--led-warn);
+}
+
+.action-error {
+  color: var(--led-down);
+  font-size: 12px;
+}

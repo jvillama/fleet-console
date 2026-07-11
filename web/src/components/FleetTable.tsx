@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, formatBytes } from "../api";
-import type { ContainerStats, ContainerSummary } from "../types";
+import type { ContainerState, ContainerStats, ContainerSummary, Role } from "../types";
+import { RowActions } from "./RowActions";
 import { StatusLed } from "./StatusLed";
 
 function formatPorts(c: ContainerSummary): string {
@@ -56,12 +57,20 @@ function useFleetStats(
 
 export function FleetTable({
   containers,
+  role,
   onSelect,
 }: {
   containers: ContainerSummary[];
+  role: Role;
   onSelect: (container: ContainerSummary) => void;
 }) {
   const stats = useFleetStats(containers);
+  // Post-action states shown until the next poll delivers fresh truth.
+  const [stateOverrides, setStateOverrides] = useState<Record<string, ContainerState>>({});
+
+  useEffect(() => setStateOverrides({}), [containers]);
+
+  const canAct = role !== "viewer";
 
   if (containers.length === 0) {
     return (
@@ -86,19 +95,21 @@ export function FleetTable({
           <th>Ports</th>
           <th className="num">CPU</th>
           <th className="num">Memory</th>
+          {canAct && <th aria-label="actions" />}
         </tr>
       </thead>
       <tbody>
         {containers.map((c) => {
           const s = stats[c.id];
+          const state = stateOverrides[c.id] ?? c.state;
           return (
             <tr
               key={c.id}
-              className={c.state !== "running" ? "row-down" : ""}
+              className={state !== "running" ? "row-down" : ""}
               onClick={() => onSelect(c)}
             >
               <td>
-                <StatusLed state={c.state} />
+                <StatusLed state={state} />
               </td>
               <td>
                 <span className="name">{c.name}</span>
@@ -115,6 +126,17 @@ export function FleetTable({
                   ? `${formatBytes(s.memoryUsageBytes)} / ${formatBytes(s.memoryLimitBytes)}`
                   : "—"}
               </td>
+              {canAct && (
+                <td className="actions-cell">
+                  <RowActions
+                    container={c}
+                    state={state}
+                    onStateChange={(id, next) =>
+                      setStateOverrides((prev) => ({ ...prev, [id]: next }))
+                    }
+                  />
+                </td>
+              )}
             </tr>
           );
         })}

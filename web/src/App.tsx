@@ -117,7 +117,11 @@ function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }
                 <p>Loading fleet…</p>
               </div>
             ) : (
-              <FleetTable containers={containers.data ?? []} onSelect={setSelected} />
+              <FleetTable
+                containers={containers.data ?? []}
+                role={user.role}
+                onSelect={setSelected}
+              />
             )}
           </main>
           {selected && (
