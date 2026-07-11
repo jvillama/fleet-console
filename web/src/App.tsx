@@ -145,7 +145,7 @@ function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }
             ? ` · last update ${containers.lastUpdated.toLocaleTimeString()}`
             : ""}
         </span>
-        <span>fleet-console v0.2 · observe-only · authenticated</span>
+        <span>fleet-console v0.3 · authenticated · actions audited</span>
       </footer>
     </div>
   );

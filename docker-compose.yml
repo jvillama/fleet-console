@@ -10,10 +10,12 @@ services:
       AUDIT_DB_PATH: /data/audit.db
       FLEET_COOKIE_SECURE: ${FLEET_COOKIE_SECURE:-false}
     volumes:
-      # Read-only Docker socket: the console can observe the host's
-      # containers. Phase 2 (start/stop actions) will need :rw — a good
-      # security tradeoff to discuss in the README.
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Read-write Docker socket: Phase 2 adds start/stop/restart. This is
+      # root-equivalent access to the host — which is why actions require
+      # the operator/admin role and are audited fail-closed. Note the
+      # console can stop its own containers (server/web) from its own UI;
+      # there is deliberately no self-guard (see README security notes).
+      - /var/run/docker.sock:/var/run/docker.sock
       - audit-data:/data
     restart: unless-stopped
 
