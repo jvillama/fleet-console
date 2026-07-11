@@ -103,3 +103,23 @@ describe("api.audit", () => {
     expect(calls[0]?.url).toBe("/api/audit?limit=10&offset=20&actor=alice");
   });
 });
+
+describe("containerAction", () => {
+  it("POSTs to the action route and returns the result", async () => {
+    const result = { id: "abc123", action: "stop", state: "exited" };
+    const { calls } = stubFetch({ "/api/containers/abc123/stop": result });
+
+    await expect(api.containerAction("abc123", "stop")).resolves.toEqual(result);
+
+    expect(calls[0]?.url).toBe("/api/containers/abc123/stop");
+    expect(calls[0]?.init?.method).toBe("POST");
+  });
+
+  it("rejects with the HTTP status on failure", async () => {
+    stubFetch({
+      "/api/containers/abc123/start": jsonResponse({ error: "Action failed" }, 502),
+    });
+
+    await expect(api.containerAction("abc123", "start")).rejects.toThrow("502");
+  });
+});
