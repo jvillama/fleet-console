@@ -11,7 +11,9 @@ import { authRoutes } from "./routes/auth.js";
 import { auditRoutes } from "./routes/audit.js";
 import { actionRoutes } from "./routes/actions.js";
 import { logsRoutes } from "./routes/logs.js";
+import { deploymentsRoutes } from "./routes/deployments.js";
 import { closeDb, initDb } from "./db.js";
+import { failInterrupted } from "./deployments.js";
 import { pingDocker } from "./docker.js";
 import type { ApiError, SessionUser } from "./types.js";
 
@@ -78,6 +80,11 @@ export async function buildApp(
   await app.register(websocket);
 
   initDb(process.env.AUDIT_DB_PATH ?? "./data/audit.db");
+  // A restart orphans any in-flight deployment pipeline — settle the rows.
+  const swept = failInterrupted();
+  if (swept > 0) {
+    app.log.warn({ swept }, "settled deployments interrupted by restart");
+  }
   app.addHook("onClose", async () => closeDb());
 
   // Auth gate: every /api route except the open set requires a valid,
@@ -113,6 +120,7 @@ export async function buildApp(
   await app.register(containerRoutes);
   await app.register(actionRoutes);
   await app.register(logsRoutes);
+  await app.register(deploymentsRoutes);
 
   return app;
 }
