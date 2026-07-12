@@ -254,6 +254,9 @@ export async function inspectForRecreate(idOrName: string): Promise<RecreateSpec
       // a fresh one, so carrying the old id over would be wrong.
       aliases: (cfg.Aliases ?? []).filter((a: string) => !info.Id.startsWith(a)),
     }));
+  const primaryAliases = ((networks[networkMode]?.Aliases ?? [])).filter(
+    (a: string) => !info.Id.startsWith(a),
+  );
 
   return {
     id: info.Id,
@@ -270,6 +273,16 @@ export async function inspectForRecreate(idOrName: string): Promise<RecreateSpec
       WorkingDir: info.Config.WorkingDir || undefined,
       User: info.Config.User || undefined,
       HostConfig: info.HostConfig,
+      // Docker re-joins the NetworkMode network implicitly but WITHOUT the
+      // old endpoint's aliases — a compose service's service-name alias
+      // would be lost, breaking peer DNS. Carry it explicitly.
+      ...(primaryAliases.length > 0
+        ? {
+            NetworkingConfig: {
+              EndpointsConfig: { [networkMode]: { Aliases: primaryAliases } },
+            },
+          }
+        : {}),
     },
     extraNetworks,
   };

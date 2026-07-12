@@ -118,6 +118,24 @@ describe("inspectForRecreate", () => {
     // The NetworkMode network is attached at create; only others are extra,
     // and Docker's own short-id alias is dropped.
     expect(spec.extraNetworks).toEqual([{ name: "backnet", aliases: ["web"] }]);
+    expect(spec.createOptions.NetworkingConfig).toEqual({
+      EndpointsConfig: { fleet_default: { Aliases: ["web-1"] } },
+    });
+  });
+
+  it("omits NetworkingConfig when the primary network has no real aliases", async () => {
+    mockClient.getContainer.mockReturnValue({
+      inspect: vi.fn().mockResolvedValue(
+        inspectFixture({
+          NetworkSettings: { Networks: { fleet_default: { Aliases: ["oldid1234567"] } } },
+        }),
+      ),
+    });
+
+    const spec = await inspectForRecreate("web-1");
+
+    expect(spec.createOptions).not.toHaveProperty("NetworkingConfig");
+    expect(spec.extraNetworks).toEqual([]);
   });
 });
 
