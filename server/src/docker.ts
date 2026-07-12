@@ -393,3 +393,13 @@ export async function watchHealth(id: string): Promise<HealthOutcome> {
   }
   return { healthy: false, reason: "health check deadline (60s) exceeded" };
 }
+
+/** True when the daemon already has this image ref locally. */
+export async function imageExistsLocally(ref: string): Promise<boolean> {
+  try {
+    await docker.getImage(ref).inspect();
+    return true;
+  } catch {
+    return false;
+  }
+}

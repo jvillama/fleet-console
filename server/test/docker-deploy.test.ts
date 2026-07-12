@@ -7,6 +7,7 @@ const mockClient = vi.hoisted(() => ({
   getContainer: vi.fn(),
   createContainer: vi.fn(),
   getNetwork: vi.fn(),
+  getImage: vi.fn(),
   pull: vi.fn(),
   version: vi.fn(),
   info: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock("dockerode", () => ({
 }));
 
 import {
+  imageExistsLocally,
   inspectForRecreate,
   pullImage,
   recreateContainer,
@@ -308,5 +310,21 @@ describe("watchHealth", () => {
       healthy: false,
       reason: "container exited during 10s grace period",
     });
+  });
+});
+
+describe("imageExistsLocally", () => {
+  it("true when image inspect succeeds", async () => {
+    mockClient.getImage = vi.fn().mockReturnValue({
+      inspect: vi.fn().mockResolvedValue({ Id: "sha256:abc" }),
+    });
+    await expect(imageExistsLocally("nginx:1.27")).resolves.toBe(true);
+  });
+
+  it("false when image inspect rejects", async () => {
+    mockClient.getImage = vi.fn().mockReturnValue({
+      inspect: vi.fn().mockRejectedValue(Object.assign(new Error("no such image"), { statusCode: 404 })),
+    });
+    await expect(imageExistsLocally("nginx:bogus")).resolves.toBe(false);
   });
 });

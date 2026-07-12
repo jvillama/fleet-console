@@ -6,6 +6,7 @@ import {
   updateDeploymentStatus,
 } from "./deployments.js";
 import {
+  imageExistsLocally,
   inspectForRecreate,
   pullImage,
   recreateContainer,
@@ -128,7 +129,15 @@ async function runPipeline(
 ): Promise<void> {
   try {
     updateDeploymentStatus(deploymentId, "pulling");
-    await pullImage(newImage);
+    try {
+      await pullImage(newImage);
+    } catch (err) {
+      // Rollback must work when the registry is down and locally-built
+      // images may never have been pushed: a failed pull is fine as long
+      // as the image is already on the host.
+      if (!(await imageExistsLocally(newImage))) throw err;
+      log.warn({ image: newImage }, "pull failed; deploying the local image");
+    }
 
     updateDeploymentStatus(deploymentId, "recreating");
     const newContainerId = await recreateContainer(spec, newImage, deploymentId);

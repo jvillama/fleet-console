@@ -10,6 +10,7 @@ vi.mock("../src/docker.js", () => ({
   stopContainer: vi.fn(),
   restartContainer: vi.fn(),
   pullImage: vi.fn(),
+  imageExistsLocally: vi.fn(),
   inspectForRecreate: vi.fn(),
   recreateContainer: vi.fn(),
   removeContainer: vi.fn(),
@@ -227,6 +228,7 @@ describe("requestDeploy — pipeline", () => {
   it("pull failure fails the deployment before the container is touched", async () => {
     mocked.inspectForRecreate.mockResolvedValue(spec());
     mocked.pullImage.mockRejectedValue(new Error("manifest unknown"));
+    mocked.imageExistsLocally.mockResolvedValue(false);
     const auditId = auditRow();
 
     const result = await requestDeploy(baseParams(auditId));
@@ -237,6 +239,22 @@ describe("requestDeploy — pipeline", () => {
     expect(mocked.recreateContainer).not.toHaveBeenCalled();
     const [event] = queryEvents({ limit: 1, offset: 0 }).events;
     expect(event).toMatchObject({ outcome: "failure", detail: "manifest unknown" });
+  });
+
+  it("proceeds with the local image when the pull fails but the image exists locally", async () => {
+    mocked.inspectForRecreate.mockResolvedValue(spec());
+    mocked.pullImage.mockRejectedValue(new Error("registry unreachable"));
+    mocked.imageExistsLocally.mockResolvedValue(true);
+    mocked.recreateContainer.mockResolvedValue("newid987");
+    mocked.watchHealth.mockResolvedValue({ healthy: true });
+    mocked.removeContainer.mockResolvedValue(undefined);
+
+    const result = await requestDeploy(baseParams(auditRow()));
+    if (!result.ok) throw new Error("expected ok");
+
+    await waitForStatus(result.deploymentId, "succeeded");
+    expect(mocked.imageExistsLocally).toHaveBeenCalledWith("nginx:1.28");
+    expect(mocked.recreateContainer).toHaveBeenCalled();
   });
 
   it("recreate failure fails the deployment with the docker error", async () => {

@@ -14,6 +14,7 @@ vi.mock("../src/docker.js", () => ({
   stopContainer: vi.fn(),
   restartContainer: vi.fn(),
   pullImage: vi.fn(),
+  imageExistsLocally: vi.fn(),
   inspectForRecreate: vi.fn(),
   recreateContainer: vi.fn(),
   removeContainer: vi.fn(),

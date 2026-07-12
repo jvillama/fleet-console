@@ -168,4 +168,6 @@ compose-managed container makes `docker compose` see it as drifted (the next
 `up` may recreate it); deploying fleet-console's own containers can kill the
 console mid-deploy (same no-self-guard policy as Phase 2); and data in
 anonymous volumes not listed in `HostConfig.Binds` does not survive the
-recreate — use named volumes for anything you care about.
+recreate — use named volumes for anything you care about. A failed image
+pull falls back to a locally present copy of the tag, so rollback keeps
+working when the registry is unreachable.
