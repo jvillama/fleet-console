@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, setUnauthorizedHandler, usePolling } from "./api";
 import { AuditLog } from "./components/AuditLog";
+import { DeployPanel } from "./components/DeployPanel";
 import { FleetTable } from "./components/FleetTable";
 import { LogPanel } from "./components/LogPanel";
 import { LoginForm } from "./components/LoginForm";
@@ -40,6 +41,10 @@ export default function App() {
 function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
   const [view, setView] = useState<"dashboard" | "audit">("dashboard");
   const [selected, setSelected] = useState<ContainerSummary | null>(null);
+  const [deploy, setDeploy] = useState<{
+    container: ContainerSummary;
+    deploymentId: number;
+  } | null>(null);
   const overview = usePolling(api.overview, POLL_MS);
   const containers = usePolling(api.containers, POLL_MS);
 
@@ -75,6 +80,7 @@ function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }
             onClick={() => {
               setView("audit");
               setSelected(null);
+              setDeploy(null);
             }}
           >
             Audit log
@@ -121,6 +127,10 @@ function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }
                 containers={containers.data ?? []}
                 role={user.role}
                 onSelect={setSelected}
+                onDeployStarted={(container, deploymentId) => {
+                  setSelected(null);
+                  setDeploy({ container, deploymentId });
+                }}
               />
             )}
           </main>
@@ -129,6 +139,15 @@ function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }
               key={selected.id}
               container={selected}
               onClose={() => setSelected(null)}
+            />
+          )}
+          {deploy && (
+            <DeployPanel
+              key={deploy.deploymentId}
+              container={deploy.container}
+              deploymentId={deploy.deploymentId}
+              role={user.role}
+              onClose={() => setDeploy(null)}
             />
           )}
         </>
@@ -145,7 +164,7 @@ function Console({ user, onLogout }: { user: SessionUser; onLogout: () => void }
             ? ` · last update ${containers.lastUpdated.toLocaleTimeString()}`
             : ""}
         </span>
-        <span>fleet-console v0.3 · authenticated · actions audited</span>
+        <span>fleet-console v0.4 · authenticated · actions audited</span>
       </footer>
     </div>
   );

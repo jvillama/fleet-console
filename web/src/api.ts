@@ -5,6 +5,10 @@ import type {
   ContainerActionResult,
   ContainerStats,
   ContainerSummary,
+  DeployAccepted,
+  Deployment,
+  DeploymentPage,
+  DeployRequest,
   FleetOverview,
   SessionUser,
 } from "./types";
@@ -43,6 +47,19 @@ export const api = {
     request<ContainerActionResult>(`/api/containers/${id}/${action}`, {
       method: "POST",
     }),
+  deployContainer: (id: string, tag: string) =>
+    request<DeployAccepted>(`/api/containers/${id}/deploy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tag } satisfies DeployRequest),
+    }),
+  getDeployment: (id: number) => getJson<Deployment>(`/api/deployments/${id}`),
+  listDeployments: (container: string, limit = 20) =>
+    getJson<DeploymentPage>(
+      `/api/deployments?container=${encodeURIComponent(container)}&limit=${limit}`,
+    ),
+  rollbackDeployment: (id: number) =>
+    request<DeployAccepted>(`/api/deployments/${id}/rollback`, { method: "POST" }),
 
   /** Throws with the server's error message (e.g. "Invalid credentials"). */
   login: async (username: string, password: string): Promise<SessionUser> => {

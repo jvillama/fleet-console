@@ -59,10 +59,12 @@ export function FleetTable({
   containers,
   role,
   onSelect,
+  onDeployStarted,
 }: {
   containers: ContainerSummary[];
   role: Role;
   onSelect: (container: ContainerSummary) => void;
+  onDeployStarted: (container: ContainerSummary, deploymentId: number) => void;
 }) {
   const stats = useFleetStats(containers);
   // Post-action states shown until the next poll delivers fresh truth.
@@ -131,9 +133,11 @@ export function FleetTable({
                   <RowActions
                     container={c}
                     state={state}
+                    role={role}
                     onStateChange={(id, next) =>
                       setStateOverrides((prev) => ({ ...prev, [id]: next }))
                     }
+                    onDeployStarted={onDeployStarted}
                   />
                 </td>
               )}

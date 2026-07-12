@@ -37,7 +37,9 @@ function rowFor(name: string): HTMLElement {
 
 describe("FleetTable", () => {
   it("renders the empty state when there are no containers", () => {
-    render(<FleetTable containers={[]} role="viewer" onSelect={vi.fn()} />);
+    render(
+      <FleetTable containers={[]} role="viewer" onSelect={vi.fn()} onDeployStarted={vi.fn()} />,
+    );
 
     expect(screen.getByText("No containers on this host yet.")).toBeInTheDocument();
   });
@@ -58,7 +60,14 @@ describe("FleetTable", () => {
       status: "Exited (0) 2 days ago",
     });
 
-    render(<FleetTable containers={[running, stopped]} role="viewer" onSelect={vi.fn()} />);
+    render(
+      <FleetTable
+        containers={[running, stopped]}
+        role="viewer"
+        onSelect={vi.fn()}
+        onDeployStarted={vi.fn()}
+      />,
+    );
 
     expect(await screen.findByText("2.5%")).toBeInTheDocument();
     const runningRow = rowFor("web-1");
@@ -80,7 +89,14 @@ describe("FleetTable", () => {
     const ok = container({});
     const broken = container({ id: "run2", shortId: "run2short000", name: "web-2" });
 
-    render(<FleetTable containers={[ok, broken]} role="viewer" onSelect={vi.fn()} />);
+    render(
+      <FleetTable
+        containers={[ok, broken]}
+        role="viewer"
+        onSelect={vi.fn()}
+        onDeployStarted={vi.fn()}
+      />,
+    );
 
     expect(await screen.findByText("2.5%")).toBeInTheDocument();
     const brokenRow = rowFor("web-2");
@@ -93,7 +109,14 @@ describe("FleetTable", () => {
     const onSelect = vi.fn();
     const c = container({});
 
-    render(<FleetTable containers={[c]} role="viewer" onSelect={onSelect} />);
+    render(
+      <FleetTable
+        containers={[c]}
+        role="viewer"
+        onSelect={onSelect}
+        onDeployStarted={vi.fn()}
+      />,
+    );
     await user.click(screen.getByText("web-1"));
 
     expect(onSelect).toHaveBeenCalledWith(c);
@@ -115,7 +138,14 @@ describe("FleetTable actions", () => {
   }
 
   it("viewers see no action buttons", () => {
-    render(<FleetTable containers={[stopped()]} role="viewer" onSelect={vi.fn()} />);
+    render(
+      <FleetTable
+        containers={[stopped()]}
+        role="viewer"
+        onSelect={vi.fn()}
+        onDeployStarted={vi.fn()}
+      />,
+    );
 
     expect(screen.queryByRole("button", { name: /start|stop|restart/i })).toBeNull();
   });
@@ -128,6 +158,7 @@ describe("FleetTable actions", () => {
         containers={[container({}), stopped()]}
         role="operator"
         onSelect={vi.fn()}
+        onDeployStarted={vi.fn()}
       />,
     );
 
@@ -146,7 +177,14 @@ describe("FleetTable actions", () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
 
-    render(<FleetTable containers={[stopped()]} role="admin" onSelect={onSelect} />);
+    render(
+      <FleetTable
+        containers={[stopped()]}
+        role="admin"
+        onSelect={onSelect}
+        onDeployStarted={vi.fn()}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "Start" }));
 
     const post = calls.find((c) => c.url === "/api/containers/dead1/start");
@@ -164,7 +202,14 @@ describe("FleetTable actions", () => {
     });
     const user = userEvent.setup();
 
-    render(<FleetTable containers={[container({})]} role="operator" onSelect={vi.fn()} />);
+    render(
+      <FleetTable
+        containers={[container({})]}
+        role="operator"
+        onSelect={vi.fn()}
+        onDeployStarted={vi.fn()}
+      />,
+    );
 
     await user.click(screen.getByRole("button", { name: "Stop" }));
     expect(screen.getByRole("button", { name: "Confirm stop?" })).toBeInTheDocument();
@@ -180,7 +225,14 @@ describe("FleetTable actions", () => {
     vi.useFakeTimers();
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
-    render(<FleetTable containers={[container({})]} role="operator" onSelect={vi.fn()} />);
+    render(
+      <FleetTable
+        containers={[container({})]}
+        role="operator"
+        onSelect={vi.fn()}
+        onDeployStarted={vi.fn()}
+      />,
+    );
 
     await user.click(screen.getByRole("button", { name: "Stop" }));
     expect(screen.getByRole("button", { name: "Confirm stop?" })).toBeInTheDocument();
@@ -199,7 +251,14 @@ describe("FleetTable actions", () => {
     });
     const user = userEvent.setup();
 
-    render(<FleetTable containers={[stopped()]} role="admin" onSelect={vi.fn()} />);
+    render(
+      <FleetTable
+        containers={[stopped()]}
+        role="admin"
+        onSelect={vi.fn()}
+        onDeployStarted={vi.fn()}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "Start" }));
 
     const row = rowFor("worker-1");
