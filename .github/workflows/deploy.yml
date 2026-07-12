@@ -1,0 +1,86 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      container:
+        description: Container name to deploy
+        required: true
+        default: fleet-console-server-1
+      tag:
+        description: Image tag to deploy (e.g. sha-1a2b3c4 or latest)
+        required: true
+        default: latest
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CONSOLE_URL: ${{ secrets.FLEET_CONSOLE_URL }}
+      DEPLOY_USER: ${{ secrets.FLEET_DEPLOY_USER }}
+      DEPLOY_PASSWORD: ${{ secrets.FLEET_DEPLOY_PASSWORD }}
+      # Inputs enter the scripts via env, never direct interpolation —
+      # a crafted input must not become shell syntax.
+      CONTAINER: ${{ inputs.container }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Check deploy secrets
+        run: |
+          missing=""
+          [ -z "$CONSOLE_URL" ] && missing="$missing FLEET_CONSOLE_URL"
+          [ -z "$DEPLOY_USER" ] && missing="$missing FLEET_DEPLOY_USER"
+          [ -z "$DEPLOY_PASSWORD" ] && missing="$missing FLEET_DEPLOY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Deploy is not configured. Set repo secrets:$missing (Settings → Secrets and variables → Actions). The console must be reachable over HTTPS from GitHub."
+            exit 1
+          fi
+
+      - name: Log in
+        run: |
+          code=$(curl -sS -o login.json -w '%{http_code}' -c cookies.txt \
+            -X POST "$CONSOLE_URL/api/login" \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -n --arg u "$DEPLOY_USER" --arg p "$DEPLOY_PASSWORD" '{username: $u, password: $p}')")
+          if [ "$code" != "200" ]; then
+            echo "::error::Login failed (HTTP $code): $(cat login.json)"
+            exit 1
+          fi
+
+      - name: Start deployment
+        run: |
+          code=$(curl -sS -o deploy.json -w '%{http_code}' -b cookies.txt \
+            -X POST "$CONSOLE_URL/api/containers/$CONTAINER/deploy" \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -n --arg t "$TAG" '{tag: $t}')")
+          if [ "$code" != "202" ]; then
+            echo "::error::Deploy refused (HTTP $code): $(cat deploy.json)"
+            exit 1
+          fi
+          echo "DEPLOYMENT_ID=$(jq -r .deploymentId deploy.json)" >> "$GITHUB_ENV"
+          echo "Deployment $(jq -r .deploymentId deploy.json) started for $CONTAINER → tag $TAG"
+
+      - name: Watch deployment
+        run: |
+          deadline=$(( $(date +%s) + 300 ))
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            curl -sS -o dep.json -b cookies.txt "$CONSOLE_URL/api/deployments/$DEPLOYMENT_ID"
+            status=$(jq -r .status dep.json)
+            echo "status: $status"
+            case "$status" in
+              succeeded)
+                echo "Deployed: $(jq -r .oldImage dep.json) → $(jq -r .newImage dep.json)"
+                exit 0
+                ;;
+              failed)
+                echo "::error::Deployment failed — $(jq -r .detail dep.json)"
+                exit 1
+                ;;
+            esac
+            sleep 5
+          done
+          echo "::error::Timed out after 5 minutes. The deployment may still be running server-side — check the console UI. (Deploying the console's own server container drops this poll by design.)"
+          exit 1

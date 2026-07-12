@@ -1,5 +1,6 @@
 services:
   server:
+    image: ghcr.io/jvillama/fleet-console-server:latest
     build: ./server
     environment:
       NODE_ENV: production
@@ -20,6 +21,7 @@ services:
     restart: unless-stopped
 
   web:
+    image: ghcr.io/jvillama/fleet-console-web:latest
     build: ./web
     ports:
       - "8080:80"

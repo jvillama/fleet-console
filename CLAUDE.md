@@ -13,8 +13,9 @@ Two independent npm packages, no workspaces — run npm commands inside `server/
 
 - `npm run dev` — server: tsx watch on :4000; web: Vite on :5173 (dev server proxies `/api` to the server)
 - `npm run typecheck` — typechecks each package (server typecheck includes `test/`)
-- `npm test` — Vitest in both packages: `server/test/` (no Docker daemon needed — dockerode is mocked) and `web/test/` (jsdom + React Testing Library; `fetch`/`WebSocket` stubbed at the boundary via `web/test/helpers.ts`, never module-mock `../src/api`). `npm run test:watch` for watch mode. No linter yet.
-- CI (`.github/workflows/ci.yml`) runs typecheck + tests + builds for both packages on pushes to `main` and PRs.
+- `npm run lint` — ESLint 9 flat config, type-checked rules (server: typescript-eslint; web: + react-hooks).
+- `npm test` — Vitest in both packages: `server/test/` (no Docker daemon needed — dockerode is mocked) and `web/test/` (jsdom + React Testing Library; `fetch`/`WebSocket` stubbed at the boundary via `web/test/helpers.ts`, never module-mock `../src/api`). `npm run test:watch` for watch mode.
+- CI (`.github/workflows/ci.yml`) runs typecheck + lint + tests + builds for both packages on pushes to `main` and PRs, then builds both container images — pushing them to GHCR (`ghcr.io/jvillama/fleet-console-{server,web}`, tags `sha-<7char>` + `latest`) only on `main`. `.github/workflows/deploy.yml` is a manual dispatch job that deploys a tag via the console API (needs FLEET_CONSOLE_URL/FLEET_DEPLOY_USER/FLEET_DEPLOY_PASSWORD secrets).
 - Full stack: `docker compose up --build`, then open http://localhost:8080. Requires a running Docker daemon.
 
 ## Gotchas
