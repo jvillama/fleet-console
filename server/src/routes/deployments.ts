@@ -55,7 +55,7 @@ function insertAuditOr503(
   }
 }
 
-export async function deploymentsRoutes(app: FastifyInstance): Promise<void> {
+export function deploymentsRoutes(app: FastifyInstance): void {
   app.post<{ Params: { id: string }; Body: DeployRequest }>(
     "/api/containers/:id/deploy",
     {
@@ -154,7 +154,7 @@ export async function deploymentsRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Querystring: { container?: string; limit?: string; offset?: string } }>(
     "/api/deployments",
-    async (request) => {
+    (request) => {
       const rawLimit = Number(request.query.limit ?? 50);
       const rawOffset = Number(request.query.offset ?? 0);
       const query: { container?: string; limit: number; offset: number } = {

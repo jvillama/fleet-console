@@ -10,7 +10,7 @@ import type { ApiError } from "../types.js";
  * Phase 1 routes: read-only fleet visibility.
  * Phase 2 will add POST /containers/:id/start|stop|restart and log streaming.
  */
-export async function containerRoutes(app: FastifyInstance): Promise<void> {
+export function containerRoutes(app: FastifyInstance): void {
   app.get("/api/overview", async () => {
     return getFleetOverview();
   });

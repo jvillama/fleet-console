@@ -94,7 +94,7 @@ describe("POST /api/containers/:id/deploy", () => {
     const res = await deploy();
 
     expect(res.statusCode).toBe(202);
-    const { deploymentId } = res.json() as { deploymentId: number };
+    const { deploymentId } = res.json<{ deploymentId: number }>();
     await waitForStatus(deploymentId, "succeeded");
     const [event] = queryEvents({ limit: 1, offset: 0, action: "container.deploy" }).events;
     expect(event).toMatchObject({
@@ -102,6 +102,7 @@ describe("POST /api/containers/:id/deploy", () => {
       role: "admin",
       target: "oldid123",
       outcome: "success",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- vitest's expect.any() is typed `any`
       ip: expect.any(String),
     });
   });
@@ -181,7 +182,7 @@ describe("POST /api/containers/:id/deploy", () => {
     mocked.watchHealth.mockResolvedValue({ healthy: true });
     mocked.removeContainer.mockResolvedValue(undefined);
     releasePull();
-    const { deploymentId } = first.json() as { deploymentId: number };
+    const { deploymentId } = first.json<{ deploymentId: number }>();
     await waitForStatus(deploymentId, "succeeded");
   });
 
@@ -226,7 +227,7 @@ describe("POST /api/deployments/:id/rollback", () => {
     });
 
     expect(res.statusCode).toBe(202);
-    const { deploymentId } = res.json() as { deploymentId: number };
+    const { deploymentId } = res.json<{ deploymentId: number }>();
     await waitForStatus(deploymentId, "succeeded");
     expect(getDeployment(deploymentId)).toMatchObject({
       newImage: "nginx:1.27",
@@ -310,7 +311,7 @@ describe("GET /api/deployments", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const page = res.json() as { deployments: { containerName: string }[]; total: number };
+    const page = res.json<{ deployments: { containerName: string }[]; total: number }>();
     expect(page.total).toBe(2);
     expect(page.deployments.every((d) => d.containerName === "web-1")).toBe(true);
   });

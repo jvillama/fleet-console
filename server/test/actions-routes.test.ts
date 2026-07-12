@@ -61,6 +61,7 @@ describe.each([
       target: "abc123",
       outcome: "success",
       detail: null,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- vitest's expect.any() is typed `any`
       ip: expect.any(String),
     });
   });

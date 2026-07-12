@@ -30,7 +30,7 @@ describe("GET /api/audit", () => {
     const res = await app.inject({ url: "/api/audit", cookies });
 
     expect(res.statusCode).toBe(200);
-    const page = res.json() as AuditPage;
+    const page = res.json<AuditPage>();
     expect(page.total).toBe(2); // loginAs + the manual event
     expect(page.events[0]?.action).toBe("auth.logout");
     expect(page.events[1]?.action).toBe("auth.login");
@@ -42,13 +42,13 @@ describe("GET /api/audit", () => {
     }
 
     const limited = await app.inject({ url: "/api/audit?limit=2", cookies });
-    expect((limited.json() as AuditPage).events).toHaveLength(2);
+    expect(limited.json<AuditPage>().events).toHaveLength(2);
 
     const offset = await app.inject({ url: "/api/audit?limit=2&offset=3", cookies });
-    expect((offset.json() as AuditPage).events).toHaveLength(1);
+    expect(offset.json<AuditPage>().events).toHaveLength(1);
 
     const filtered = await app.inject({ url: "/api/audit?actor=bob&action=auth.logout", cookies });
-    const page = filtered.json() as AuditPage;
+    const page = filtered.json<AuditPage>();
     expect(page.total).toBe(3);
     expect(page.events.every((e) => e.actor === "bob")).toBe(true);
   });
@@ -57,6 +57,6 @@ describe("GET /api/audit", () => {
     const res = await app.inject({ url: "/api/audit?limit=99999&offset=-4", cookies });
 
     expect(res.statusCode).toBe(200);
-    expect((res.json() as AuditPage).total).toBe(1);
+    expect(res.json<AuditPage>().total).toBe(1);
   });
 });

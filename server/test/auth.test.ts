@@ -37,19 +37,19 @@ describe("loadUsers", () => {
       FLEET_USERS: JSON.stringify([
         { username: "alice", role: "admin", passwordHash: "scrypt:aa:bb" },
       ]),
-    } as NodeJS.ProcessEnv);
+    });
     expect(users).toEqual([
       { username: "alice", role: "admin", passwordHash: "scrypt:aa:bb" },
     ]);
   });
 
   it("returns an empty list when nothing is configured", () => {
-    expect(loadUsers({} as NodeJS.ProcessEnv)).toEqual([]);
+    expect(loadUsers({})).toEqual([]);
   });
 
   it("throws on invalid JSON", () => {
     expect(() =>
-      loadUsers({ FLEET_USERS: "not json" } as NodeJS.ProcessEnv),
+      loadUsers({ FLEET_USERS: "not json" }),
     ).toThrow(/valid JSON/);
   });
 
@@ -57,12 +57,12 @@ describe("loadUsers", () => {
     expect(() =>
       loadUsers({
         FLEET_USERS: JSON.stringify([{ username: "a", role: "root", passwordHash: "x" }]),
-      } as NodeJS.ProcessEnv),
+      }),
     ).toThrow(/entry 0/);
     expect(() =>
       loadUsers({
         FLEET_USERS: JSON.stringify([{ username: "a" }]),
-      } as NodeJS.ProcessEnv),
+      }),
     ).toThrow(/entry 0/);
   });
 });

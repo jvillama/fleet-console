@@ -116,7 +116,7 @@ function registerAction(
   );
 }
 
-export async function actionRoutes(app: FastifyInstance): Promise<void> {
+export function actionRoutes(app: FastifyInstance): void {
   registerAction(app, "start", startContainer);
   registerAction(app, "stop", stopContainer);
   registerAction(app, "restart", restartContainer);
