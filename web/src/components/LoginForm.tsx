@@ -22,7 +22,7 @@ export function LoginForm({ onLogin }: { onLogin: (user: SessionUser) => void })
 
   return (
     <div className="login-screen">
-      <form className="login-card" onSubmit={handleSubmit}>
+      <form className="login-card" onSubmit={(e) => void handleSubmit(e)}>
         <h1>Fleet Console</h1>
         <p className="login-hint">Sign in to view the fleet</p>
         <label>
