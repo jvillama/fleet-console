@@ -4,7 +4,7 @@ An internal operations dashboard for a Docker container fleet. Treats the
 containers on a host like machines in a small data center: one screen showing
 what's up, what's down, and what each machine is consuming — refreshed live.
 
-> **Status: Phase 2 (container actions: start/stop/restart, role-gated, audited fail-closed).** See [Roadmap](#roadmap).
+> **Status: Phase 3 (deployment workflow: deploy an image tag, watch health, one-click rollback).** See [Roadmap](#roadmap).
 
 ![screenshot placeholder — add a demo GIF here after first run]
 
@@ -128,6 +128,10 @@ with pagination and `actor`/`action` filters.
 | `POST /api/containers/:id/start` | session + operator | Start a container |
 | `POST /api/containers/:id/stop` | session + operator | Stop a container (10s grace) |
 | `POST /api/containers/:id/restart` | session + operator | Restart a container |
+| `POST /api/containers/:id/deploy` | session + admin | Deploy a new image tag (async — returns `202 { deploymentId }`) |
+| `POST /api/deployments/:id/rollback` | session + admin | Roll back to that deployment's previous image |
+| `GET /api/deployments/:id` | session | One deployment's status |
+| `GET /api/deployments?container=` | session | Deployment history for a container name |
 
 ## Roadmap
 
@@ -135,7 +139,8 @@ with pagination and `actor`/`action` filters.
 - [x] **Phase 1.5 — auth + audit:** named-user login, session cookie, SQLite audit log with UI viewer
 - [x] **Phase 1.75 — live logs:** per-container log streaming over WebSockets, session-gated and audited
 - [x] **Phase 2 — actions:** start/stop/restart from the UI; socket mounted `rw`; role enforcement; mutating actions audited **fail-closed**
-- [ ] **Phase 3 — deployment workflow:** pick an image tag, roll out to a container group, watch health, one-click rollback; CI/CD via GitHub Actions (lint → typecheck → build → push image → deploy)
+- [x] **Phase 3 — deployment workflow:** pick an image tag, deploy per container with health watch and one-click rollback; deploys admin-only, audited fail-closed
+- [ ] **Phase 3.5 — CI/CD:** GitHub Actions build → push image → deploy against the console
 - [ ] **Polish:** shared types package, web-package tests, README demo GIF
 
 ## Security notes
@@ -154,3 +159,15 @@ terminal. The stack still serves plain HTTP — put TLS in front (and set
 network. The server trusts `X-Forwarded-For` (`trustProxy`) because the
 bundled nginx is the sole ingress — don't publish the server container's
 port directly, or clients could spoof the rate-limit key and audit IPs.
+
+Deploys raise the stakes again: they change what code runs, so they require
+the **admin** role (operators keep start/stop/restart) and follow the same
+fail-closed audit pattern with the outcome settled when the pipeline
+finishes. Three sharp edges are documented rather than solved: recreating a
+compose-managed container makes `docker compose` see it as drifted (the next
+`up` may recreate it); deploying fleet-console's own containers can kill the
+console mid-deploy (same no-self-guard policy as Phase 2); and data in
+anonymous volumes not listed in `HostConfig.Binds` does not survive the
+recreate — use named volumes for anything you care about. A failed image
+pull falls back to a locally present copy of the tag, so rollback keeps
+working when the registry is unreachable.

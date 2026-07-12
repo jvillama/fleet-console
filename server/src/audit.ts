@@ -1,15 +1,13 @@
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-import Database from "better-sqlite3";
+import { getDb } from "./db.js";
 import type { AuditEvent, AuditPage, Role } from "./types.js";
 
 /**
- * Audit log storage. This is the only module that touches better-sqlite3 —
- * the same "one module owns the dependency" pattern as docker.ts.
+ * Audit log storage. Table access lives here; the SQLite connection and
+ * schema migrations live in db.ts (the only module touching better-sqlite3).
  *
- * recordEvent() throws on failure; callers choose the policy. In this
- * observe-only slice callers fail open (log and continue). Phase 2 mutating
- * endpoints must fail closed (refuse the action if the write fails).
+ * recordEvent() throws on failure; callers choose the policy. Observe-only
+ * callers fail open (log and continue). Mutating endpoints fail closed
+ * (refuse the action if the write fails).
  */
 
 export interface NewAuditEvent {
@@ -29,42 +27,8 @@ export interface AuditQuery {
   action?: string;
 }
 
-let db: Database.Database | null = null;
-
-export function initAudit(path: string): void {
-  closeAudit();
-  if (path !== ":memory:") {
-    mkdirSync(dirname(path), { recursive: true });
-  }
-  db = new Database(path);
-  db.pragma("journal_mode = WAL");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS audit_events (
-      id      INTEGER PRIMARY KEY AUTOINCREMENT,
-      ts      TEXT    NOT NULL,
-      actor   TEXT    NOT NULL,
-      role    TEXT,
-      action  TEXT    NOT NULL,
-      target  TEXT,
-      outcome TEXT    NOT NULL,
-      ip      TEXT,
-      detail  TEXT
-    );
-  `);
-}
-
-export function closeAudit(): void {
-  db?.close();
-  db = null;
-}
-
-function requireDb(): Database.Database {
-  if (!db) throw new Error("Audit store not initialized — call initAudit() first");
-  return db;
-}
-
 export function recordEvent(event: NewAuditEvent): number {
-  const result = requireDb()
+  const result = getDb()
     .prepare(
       `INSERT INTO audit_events (ts, actor, role, action, target, outcome, ip, detail)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -95,7 +59,7 @@ export function queryEvents(q: AuditQuery): AuditPage {
   }
   const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
 
-  const d = requireDb();
+  const d = getDb();
   const total = (
     d.prepare(`SELECT COUNT(*) AS n FROM audit_events ${whereSql}`).get(params) as { n: number }
   ).n;
@@ -119,7 +83,7 @@ export function updateEventOutcome(
   outcome: "success" | "failure",
   detail?: string,
 ): void {
-  const result = requireDb()
+  const result = getDb()
     .prepare(`UPDATE audit_events SET outcome = ?, detail = ? WHERE id = ?`)
     .run(outcome, detail ?? null, id);
   if (result.changes === 0) {

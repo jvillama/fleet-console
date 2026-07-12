@@ -613,3 +613,59 @@ th.num {
   color: var(--led-down);
   font-size: 12px;
 }
+
+/* --- Deploy panel (Phase 3) ------------------------------------------ */
+
+.deploy-form {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.deploy-tag {
+  width: 7rem;
+  font: inherit;
+  padding: 0.15rem 0.4rem;
+}
+
+.deploy-panel {
+  border-top: 1px solid var(--line);
+  padding: 0.75rem 1rem;
+}
+
+.deploy-images {
+  font-family: monospace;
+}
+
+.deploy-meta {
+  opacity: 0.7;
+  font-size: 0.85em;
+}
+
+.deploy-phases {
+  display: flex;
+  gap: 1rem;
+  list-style: none;
+  padding: 0;
+}
+
+.deploy-phases .done {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.deploy-phases .current {
+  font-weight: 600;
+}
+
+.deploy-phases .pending {
+  opacity: 0.4;
+}
+
+.deploy-ok {
+  color: var(--led-ok);
+}
+
+.deploy-fail {
+  color: var(--led-down);
+}

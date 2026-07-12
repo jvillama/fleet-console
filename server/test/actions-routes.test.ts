@@ -14,7 +14,8 @@ vi.mock("../src/docker.js", () => ({
 
 import * as dockerApi from "../src/docker.js";
 import { buildApp } from "../src/app.js";
-import { closeAudit, queryEvents } from "../src/audit.js";
+import { queryEvents } from "../src/audit.js";
+import { closeDb } from "../src/db.js";
 import { loginAs } from "./helpers.js";
 
 const mocked = vi.mocked(dockerApi);
@@ -161,7 +162,7 @@ describe("outcomes", () => {
   it("fails closed: 503 when the audit write fails, docker never called", async () => {
     // Login above already succeeded (auth audits fail-open). Closing the
     // store makes the action route's recordEvent throw.
-    closeAudit();
+    closeDb();
 
     const res = await post("/api/containers/abc123/stop");
 

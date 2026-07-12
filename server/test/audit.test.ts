@@ -1,18 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  closeAudit,
-  initAudit,
-  queryEvents,
-  recordEvent,
-  updateEventOutcome,
-} from "../src/audit.js";
+import { closeDb, initDb } from "../src/db.js";
+import { queryEvents, recordEvent, updateEventOutcome } from "../src/audit.js";
 
 beforeEach(() => {
-  initAudit(":memory:");
+  initDb(":memory:");
 });
 
 afterEach(() => {
-  closeAudit();
+  closeDb();
 });
 
 function record(actor: string, action = "auth.login", outcome: "success" | "failure" = "success") {
@@ -84,14 +79,14 @@ describe("recordEvent / queryEvents", () => {
   });
 
   it("throws when the store is closed (callers own the failure policy)", () => {
-    closeAudit();
+    closeDb();
     expect(() => record("alice")).toThrow(/not initialized/);
-    initAudit(":memory:"); // leave a store for afterEach
+    initDb(":memory:"); // leave a store for afterEach
   });
 
   it("re-initializing gives a fresh store", () => {
     record("alice");
-    initAudit(":memory:");
+    initDb(":memory:");
     expect(queryEvents({ limit: 10, offset: 0 }).total).toBe(0);
   });
 });
