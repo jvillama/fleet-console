@@ -214,3 +214,169 @@ export async function streamContainerLogs(
     },
   };
 }
+
+// --- Phase 3: deployment workflow ---------------------------------------
+
+/** Pull repo:tag through the daemon; resolves when the pull completes. */
+export async function pullImage(ref: string): Promise<void> {
+  const stream = await docker.pull(ref);
+  await new Promise<void>((resolve, reject) => {
+    docker.modem.followProgress(stream, (err: Error | null) =>
+      err ? reject(err) : resolve(),
+    );
+  });
+}
+
+export interface RecreateSpec {
+  id: string;
+  /** Container name without the leading slash — stable across recreates. */
+  name: string;
+  /** Full image ref currently in use. */
+  image: string;
+  wasRunning: boolean;
+  /** Create options carried over from the old container (sans name/Image). */
+  createOptions: Docker.ContainerCreateOptions;
+  /** Networks beyond HostConfig.NetworkMode, connected after create. */
+  extraNetworks: { name: string; aliases: string[] }[];
+}
+
+/** Everything needed to recreate a container with a different image. */
+export async function inspectForRecreate(idOrName: string): Promise<RecreateSpec> {
+  const info = await docker.getContainer(idOrName).inspect();
+  const name = info.Name.replace(/^\//, "");
+  const networkMode = info.HostConfig.NetworkMode ?? "default";
+  const networks = info.NetworkSettings?.Networks ?? {};
+  const extraNetworks = Object.entries(networks)
+    .filter(([netName]) => netName !== networkMode)
+    .map(([netName, cfg]) => ({
+      name: netName,
+      // Docker adds a short-id alias of its own; a recreated container gets
+      // a fresh one, so carrying the old id over would be wrong.
+      aliases: (cfg.Aliases ?? []).filter((a: string) => !info.Id.startsWith(a)),
+    }));
+
+  return {
+    id: info.Id,
+    name,
+    image: info.Config.Image,
+    wasRunning: info.State.Running,
+    createOptions: {
+      Env: info.Config.Env,
+      Cmd: info.Config.Cmd,
+      Entrypoint: info.Config.Entrypoint,
+      Labels: info.Config.Labels,
+      ExposedPorts: info.Config.ExposedPorts,
+      Healthcheck: info.Config.Healthcheck,
+      WorkingDir: info.Config.WorkingDir || undefined,
+      User: info.Config.User || undefined,
+      HostConfig: info.HostConfig,
+    },
+    extraNetworks,
+  };
+}
+
+/**
+ * Replace a container with a copy running newImage: stop → rename (frees
+ * the name) → create + start the replacement. If anything fails after the
+ * rename, the original is renamed back (and restarted if it was running)
+ * before the error propagates, so the fleet looks untouched. Returns the
+ * new container's id.
+ */
+export async function recreateContainer(
+  spec: RecreateSpec,
+  newImage: string,
+  deploymentId: number,
+): Promise<string> {
+  const old = docker.getContainer(spec.id);
+  const parkedName = `${spec.name}-predeploy-${deploymentId}`;
+
+  if (spec.wasRunning) {
+    try {
+      await old.stop();
+    } catch (err) {
+      if ((err as { statusCode?: number }).statusCode !== 304) throw err;
+    }
+  }
+  await old.rename({ name: parkedName });
+
+  let createdId: string | null = null;
+  try {
+    const created = await docker.createContainer({
+      ...spec.createOptions,
+      name: spec.name,
+      Image: newImage,
+    });
+    createdId = created.id;
+    for (const net of spec.extraNetworks) {
+      await docker.getNetwork(net.name).connect({
+        Container: created.id,
+        EndpointConfig: net.aliases.length > 0 ? { Aliases: net.aliases } : {},
+      });
+    }
+    await created.start();
+    return created.id;
+  } catch (err) {
+    // Best-effort restore; the original error is the one worth surfacing.
+    try {
+      if (createdId !== null) {
+        await docker.getContainer(createdId).remove({ force: true });
+      }
+      await old.rename({ name: spec.name });
+      if (spec.wasRunning) await old.start();
+    } catch {
+      // Restore failed too — the original is still parked under parkedName;
+      // the deployment's detail carries the primary error for the operator.
+    }
+    throw err;
+  }
+}
+
+export async function removeContainer(id: string): Promise<void> {
+  await docker.getContainer(id).remove();
+}
+
+export interface HealthOutcome {
+  healthy: boolean;
+  reason?: string;
+}
+
+const HEALTH_POLL_MS = 1000;
+const HEALTH_DEADLINE_MS = 60_000;
+const NO_HEALTHCHECK_GRACE_MS = 10_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Watch a freshly started container come up. With a HEALTHCHECK: poll until
+ * Docker reports healthy (ok) or unhealthy / 60 s deadline (failed). Without
+ * one: the container must still be running after a 10 s grace period.
+ */
+export async function watchHealth(id: string): Promise<HealthOutcome> {
+  const container = docker.getContainer(id);
+  const first = await container.inspect();
+
+  if (first.State.Health === undefined) {
+    await sleep(NO_HEALTHCHECK_GRACE_MS);
+    const after = await container.inspect();
+    return after.State.Running
+      ? { healthy: true }
+      : {
+          healthy: false,
+          reason: `container ${after.State.Status} during 10s grace period`,
+        };
+  }
+
+  const deadline = Date.now() + HEALTH_DEADLINE_MS;
+  let status: string = first.State.Health.Status;
+  while (Date.now() < deadline) {
+    if (status === "healthy") return { healthy: true };
+    if (status === "unhealthy") {
+      return { healthy: false, reason: "container reported unhealthy" };
+    }
+    await sleep(HEALTH_POLL_MS);
+    status = (await container.inspect()).State.Health?.Status ?? "starting";
+  }
+  return { healthy: false, reason: "health check deadline (60s) exceeded" };
+}
