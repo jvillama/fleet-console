@@ -101,3 +101,49 @@ export interface ContainerActionResult {
   /** Container state after the action, from a post-action inspect. */
   state: ContainerState;
 }
+
+// --- Deployments (Phase 3, mirrored in web/src/types.ts) ---------------
+
+export type DeploymentStatus =
+  | "pending"      // row created, pipeline not yet started
+  | "pulling"      // pulling the new image
+  | "recreating"   // stop old / rename / create + start new
+  | "watching"     // health watch on the new container
+  | "succeeded"
+  | "failed";
+
+export interface Deployment {
+  id: number;
+  /** Container the deploy targeted (id before the recreate). */
+  containerId: string;
+  /** Stable identity across recreates — history and rollback key on this. */
+  containerName: string;
+  /** Full ref before the deploy, e.g. "nginx:1.27-alpine". */
+  oldImage: string;
+  /** Full ref deployed, e.g. "nginx:1.28-alpine". */
+  newImage: string;
+  status: DeploymentStatus;
+  /** Failure reason or success summary. */
+  detail: string | null;
+  actor: string;
+  role: Role;
+  /** Deployment id this one rolls back, else null. */
+  rollbackOf: number | null;
+  /** Set once the replacement container exists. */
+  newContainerId: string | null;
+  startedAt: string; // ISO 8601
+  finishedAt: string | null;
+}
+
+export interface DeployRequest {
+  tag: string;
+}
+
+export interface DeployAccepted {
+  deploymentId: number;
+}
+
+export interface DeploymentPage {
+  deployments: Deployment[];
+  total: number;
+}

@@ -27,6 +27,24 @@ const MIGRATIONS: string[] = [
     ip      TEXT,
     detail  TEXT
   );`,
+  // 2 — deployments (Phase 3). One row per deploy attempt; a rollback is
+  // another row with rollback_of set. container_name is the stable key
+  // across recreates (a deploy changes the container id).
+  `CREATE TABLE deployments (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    container_id      TEXT    NOT NULL,
+    container_name    TEXT    NOT NULL,
+    old_image         TEXT    NOT NULL,
+    new_image         TEXT    NOT NULL,
+    status            TEXT    NOT NULL,
+    detail            TEXT,
+    actor             TEXT    NOT NULL,
+    role              TEXT    NOT NULL,
+    rollback_of       INTEGER,
+    new_container_id  TEXT,
+    started_at        TEXT    NOT NULL,
+    finished_at       TEXT
+  );`,
 ];
 
 let db: Database.Database | null = null;
