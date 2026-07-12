@@ -159,6 +159,16 @@ describe("requestDeploy — validation", () => {
     mocked.removeContainer.mockResolvedValue(undefined);
     if (first.ok) await waitForStatus(first.deploymentId, "succeeded");
   });
+
+  it("returns a structured 502 instead of throwing when the store is unavailable", async () => {
+    mocked.inspectForRecreate.mockResolvedValue(spec());
+    closeDb(); // createDeployment / findActiveDeployment will throw
+
+    const result = await requestDeploy(baseParams(1));
+
+    expect(result).toMatchObject({ ok: false, code: 502 });
+    initDb(":memory:"); // leave a store for afterEach
+  });
 });
 
 describe("requestDeploy — pipeline", () => {

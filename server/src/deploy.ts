@@ -87,23 +87,33 @@ export async function requestDeploy(p: DeployRequestParams): Promise<DeployReque
     return { ok: false, code: 422, error: "Container already runs that image" };
   }
 
-  if (active.has(spec.name) || findActiveDeployment(spec.name) !== null) {
+  let deploymentId: number;
+  try {
+    if (active.has(spec.name) || findActiveDeployment(spec.name) !== null) {
+      return {
+        ok: false,
+        code: 409,
+        error: "A deployment is already active for this container",
+      };
+    }
+    deploymentId = createDeployment({
+      containerId: spec.id,
+      containerName: spec.name,
+      oldImage: spec.image,
+      newImage,
+      actor: p.actor,
+      role: p.role,
+      ...(p.rollbackOf !== undefined ? { rollbackOf: p.rollbackOf } : {}),
+    });
+  } catch (err) {
+    // The engine never throws to the route — a store failure at validation
+    // time becomes a structured outcome like every other failure.
     return {
       ok: false,
-      code: 409,
-      error: "A deployment is already active for this container",
+      code: 502,
+      error: err instanceof Error ? err.message : "Deployment store unavailable",
     };
   }
-
-  const deploymentId = createDeployment({
-    containerId: spec.id,
-    containerName: spec.name,
-    oldImage: spec.image,
-    newImage,
-    actor: p.actor,
-    role: p.role,
-    ...(p.rollbackOf !== undefined ? { rollbackOf: p.rollbackOf } : {}),
-  });
   active.set(spec.name, deploymentId);
   void runPipeline(deploymentId, spec, newImage, p.auditId, p.log);
   return { ok: true, deploymentId };
