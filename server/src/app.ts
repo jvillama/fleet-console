@@ -11,7 +11,7 @@ import { authRoutes } from "./routes/auth.js";
 import { auditRoutes } from "./routes/audit.js";
 import { actionRoutes } from "./routes/actions.js";
 import { logsRoutes } from "./routes/logs.js";
-import { closeAudit, initAudit } from "./audit.js";
+import { closeDb, initDb } from "./db.js";
 import { pingDocker } from "./docker.js";
 import type { ApiError, SessionUser } from "./types.js";
 
@@ -77,8 +77,8 @@ export async function buildApp(
   await app.register(rateLimit, { global: false });
   await app.register(websocket);
 
-  initAudit(process.env.AUDIT_DB_PATH ?? "./data/audit.db");
-  app.addHook("onClose", async () => closeAudit());
+  initDb(process.env.AUDIT_DB_PATH ?? "./data/audit.db");
+  app.addHook("onClose", async () => closeDb());
 
   // Auth gate: every /api route except the open set requires a valid,
   // unexpired session. New routes are therefore protected by default.

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
-import { closeAudit, queryEvents } from "../src/audit.js";
+import { queryEvents } from "../src/audit.js";
+import { closeDb } from "../src/db.js";
 import { loginAs } from "./helpers.js";
 
 let app: FastifyInstance;
@@ -156,7 +157,7 @@ describe("audit trail of auth events", () => {
   });
 
   it("fails open: login still succeeds when the audit write fails", async () => {
-    closeAudit();
+    closeDb();
 
     const res = await app.inject({
       method: "POST",
