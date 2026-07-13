@@ -72,7 +72,7 @@ describe("RowActions deploy flow", () => {
     await u.click(screen.getByRole("button", { name: "Deploy tag" }));
 
     expect(calls[0]?.url).toBe("/api/containers/abc123/deploy");
-    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ tag: "1.28" });
+    expect(JSON.parse(calls[0]?.init?.body as string)).toEqual({ tag: "1.28" });
     expect(onDeployStarted).toHaveBeenCalledWith(container, 7);
   });
 

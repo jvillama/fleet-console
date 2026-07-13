@@ -66,7 +66,7 @@ export function loadUsers(env: NodeJS.ProcessEnv = process.env): UserRecord[] {
         `FLEET_USERS entry ${i} is invalid — need {username, role (admin|operator|viewer), passwordHash}`,
       );
     }
-    return { username: u.username, role: u.role as Role, passwordHash: u.passwordHash };
+    return { username: u.username, role: u.role, passwordHash: u.passwordHash };
   });
 }
 

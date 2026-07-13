@@ -109,6 +109,7 @@ describe("GET /api/logs/:id (websocket)", () => {
     const { stream } = mockLogStream();
     const ws = await openSocket();
     const messages: string[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string -- ws types RawData as Buffer | ArrayBuffer | Buffer[], but src/routes/logs.ts only ever socket.send()s strings, so frames always arrive as Buffer here.
     ws.on("message", (data) => messages.push(data.toString()));
 
     stream.write("first line\nsecond ");
@@ -124,6 +125,7 @@ describe("GET /api/logs/:id (websocket)", () => {
     const { stream } = mockLogStream();
     const ws = await openSocket();
     const messages: string[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string -- ws types RawData as Buffer | ArrayBuffer | Buffer[], but src/routes/logs.ts only ever socket.send()s strings, so frames always arrive as Buffer here.
     ws.on("message", (data) => messages.push(data.toString()));
 
     stream.write("crlf line\r\n");
@@ -139,6 +141,7 @@ describe("GET /api/logs/:id (websocket)", () => {
     const { stream } = mockLogStream();
     const ws = await openSocket();
     const messages: string[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string -- ws types RawData as Buffer | ArrayBuffer | Buffer[], but src/routes/logs.ts only ever socket.send()s strings, so frames always arrive as Buffer here.
     ws.on("message", (data) => messages.push(data.toString()));
     const closed = onClose(ws);
 

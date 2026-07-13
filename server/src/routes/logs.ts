@@ -51,7 +51,7 @@ export function createLineForwarder(send: (line: string) => void): {
  * stream open. Works for stopped containers too — the historical tail is
  * served and the stream then ends.
  */
-export async function logsRoutes(app: FastifyInstance): Promise<void> {
+export function logsRoutes(app: FastifyInstance): void {
   app.get<{ Params: { id: string } }>(
     "/api/logs/:id",
     { websocket: true },

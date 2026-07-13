@@ -46,7 +46,7 @@ export function stubFetch(routes: Record<string, Route>): {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-      const url = String(input);
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       calls.push({ url, init });
       const entry = Object.entries(routes).find(([prefix]) => url.startsWith(prefix));
       if (!entry) throw new Error(`stubFetch: no route for ${url}`);
@@ -81,7 +81,7 @@ export class FakeWebSocket {
   onclose: Handler<CloseEvent> = null;
   onerror: Handler<Event> = null;
   send = vi.fn();
-  close = vi.fn((_code?: number, _reason?: string) => {
+  close = vi.fn(() => {
     this.readyState = FakeWebSocket.CLOSED;
   });
 

@@ -140,8 +140,33 @@ with pagination and `actor`/`action` filters.
 - [x] **Phase 1.75 — live logs:** per-container log streaming over WebSockets, session-gated and audited
 - [x] **Phase 2 — actions:** start/stop/restart from the UI; socket mounted `rw`; role enforcement; mutating actions audited **fail-closed**
 - [x] **Phase 3 — deployment workflow:** pick an image tag, deploy per container with health watch and one-click rollback; deploys admin-only, audited fail-closed
-- [ ] **Phase 3.5 — CI/CD:** GitHub Actions build → push image → deploy against the console
+- [x] **Phase 3.5 — CI/CD:** GitHub Actions build → push image → deploy against the console
 - [ ] **Polish:** shared types package, web-package tests, README demo GIF
+
+## CI/CD
+
+Every push to `main` runs the full pipeline — typecheck → lint → test →
+build in both packages — then builds and publishes both container images
+to GHCR: `ghcr.io/jvillama/fleet-console-server` and
+`ghcr.io/jvillama/fleet-console-web`, each tagged `sha-<7char>` (the exact
+commit) and `latest`. Pull requests run the same pipeline and build the
+images without pushing, so a broken Dockerfile fails the PR.
+
+Consuming the images: `docker compose pull && docker compose up -d`
+fetches `latest` (the compose file still builds locally with
+`up --build`, so the offline dev loop is unchanged) — or roll a single
+container between `sha-*` tags from fleet-console's own deploy UI, which
+is the dogfood path.
+
+A manual **Deploy** workflow (`Actions → Deploy → Run workflow`) calls the
+console's deploy API for a chosen container and tag. It needs three repo
+secrets — `FLEET_CONSOLE_URL`, `FLEET_DEPLOY_USER`, `FLEET_DEPLOY_PASSWORD`
+(an admin account created for CI) — and fails with instructions when they
+are unset. Two caveats: point it only at an HTTPS console
+(`FLEET_COOKIE_SECURE=true` behind TLS), and deploying the console's own
+`server` container drops the workflow's status poll mid-flight (the
+self-deploy footgun) — the run may report a timeout even though the deploy
+succeeded.
 
 ## Security notes
 

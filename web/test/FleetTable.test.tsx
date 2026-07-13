@@ -150,7 +150,7 @@ describe("FleetTable actions", () => {
     expect(screen.queryByRole("button", { name: /start|stop|restart/i })).toBeNull();
   });
 
-  it("operators see Start on stopped rows, Stop and Restart on running rows", async () => {
+  it("operators see Start on stopped rows, Stop and Restart on running rows", () => {
     stubFetch({ "/api/containers/run1/stats": jsonResponse(statsFixture) });
 
     render(

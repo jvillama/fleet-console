@@ -100,11 +100,16 @@ export async function getContainerStats(id: string): Promise<ContainerStats> {
   };
 }
 
+/** @types/dockerode declares `info(): Promise<any>` — narrow it once at the boundary. */
+interface DockerSystemInfo {
+  Name?: string;
+}
+
 export async function getFleetOverview(): Promise<FleetOverview> {
   const [containers, version, info] = await Promise.all([
     docker.listContainers({ all: true }),
     docker.version(),
-    docker.info(),
+    docker.info() as Promise<DockerSystemInfo>,
   ]);
 
   const running = containers.filter((c) => c.State === "running").length;
@@ -246,16 +251,18 @@ export async function inspectForRecreate(idOrName: string): Promise<RecreateSpec
   const name = info.Name.replace(/^\//, "");
   const networkMode = info.HostConfig.NetworkMode ?? "default";
   const networks = info.NetworkSettings?.Networks ?? {};
+  // @types/dockerode declares NetworkInfo.Aliases as `any` — narrow to
+  // string[] once here rather than propagating `any` through every use.
   const extraNetworks = Object.entries(networks)
     .filter(([netName]) => netName !== networkMode)
     .map(([netName, cfg]) => ({
       name: netName,
       // Docker adds a short-id alias of its own; a recreated container gets
       // a fresh one, so carrying the old id over would be wrong.
-      aliases: (cfg.Aliases ?? []).filter((a: string) => !info.Id.startsWith(a)),
+      aliases: ((cfg.Aliases ?? []) as string[]).filter((a) => !info.Id.startsWith(a)),
     }));
-  const primaryAliases = ((networks[networkMode]?.Aliases ?? [])).filter(
-    (a: string) => !info.Id.startsWith(a),
+  const primaryAliases = ((networks[networkMode]?.Aliases ?? []) as string[]).filter(
+    (a) => !info.Id.startsWith(a),
   );
 
   return {

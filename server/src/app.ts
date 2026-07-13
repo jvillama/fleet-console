@@ -85,7 +85,7 @@ export async function buildApp(
   if (swept > 0) {
     app.log.warn({ swept }, "settled deployments interrupted by restart");
   }
-  app.addHook("onClose", async () => closeDb());
+  app.addHook("onClose", () => closeDb());
 
   // Auth gate: every /api route except the open set requires a valid,
   // unexpired session. New routes are therefore protected by default.

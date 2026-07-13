@@ -37,7 +37,12 @@ export function AuditLog() {
 
   useEffect(() => {
     void load(0, true);
-    // Refetch from the top whenever a filter changes.
+    // Refetch from the top whenever a filter changes. `load` is deliberately
+    // omitted: it's redefined every render (not memoized) but only closes
+    // over `actor`/`action`, both already listed — adding `load` itself
+    // would re-fire this effect on every render since each call updates
+    // state above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actor, action]);
 
   return (

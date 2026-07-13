@@ -13,8 +13,8 @@ interface AuditQuerystring {
  * authenticated user may read it in this slice; restricting to admin comes
  * with role enforcement.
  */
-export async function auditRoutes(app: FastifyInstance): Promise<void> {
-  app.get<{ Querystring: AuditQuerystring }>("/api/audit", async (request) => {
+export function auditRoutes(app: FastifyInstance): void {
+  app.get<{ Querystring: AuditQuerystring }>("/api/audit", (request) => {
     const rawLimit = Number(request.query.limit ?? 50);
     const rawOffset = Number(request.query.offset ?? 0);
     const query: AuditQuery = {

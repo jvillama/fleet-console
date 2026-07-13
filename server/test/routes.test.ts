@@ -87,6 +87,7 @@ describe("GET /api/health", () => {
     expect(res.json()).toEqual({
       ok: true,
       docker: "connected",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- vitest's expect.any() is typed `any`
       uptimeSeconds: expect.any(Number),
     });
   });
