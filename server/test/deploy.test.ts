@@ -187,7 +187,11 @@ describe("requestDeploy — pipeline", () => {
 
     const result = await requestDeploy(baseParams(auditId));
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- vitest's expect.any() is typed `any`
-    expect(result).toEqual({ ok: true, deploymentId: expect.any(Number) });
+    expect(result).toEqual({
+      ok: true,
+      deploymentId: expect.any(Number),
+      containerName: "web-1",
+    });
     if (!result.ok) return;
 
     await waitForStatus(result.deploymentId, "succeeded");

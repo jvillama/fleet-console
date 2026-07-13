@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { recordEvent, updateEventOutcome } from "../audit.js";
+import { recordEvent, updateEventOutcome, updateEventTarget } from "../audit.js";
 import { requireRole } from "../authz.js";
 import { requestDeploy } from "../deploy.js";
 import { getDeployment, queryDeployments } from "../deployments.js";
@@ -98,6 +98,16 @@ export function deploymentsRoutes(app: FastifyInstance): void {
         settleAudit(request, auditId, "failure", result.error);
         const body: ApiError = { error: result.error };
         return reply.code(result.code).send(body);
+      }
+      // The row was inserted (fail-closed) before the container was
+      // resolved, so its target is whatever the client sent — id or name.
+      // Pin it to the stable name, the identity rollback rows and
+      // deployment history key on. Fail open: the pipeline is already
+      // running and the row itself is intact.
+      try {
+        updateEventTarget(auditId, result.containerName);
+      } catch (err) {
+        request.log.error({ err, auditId }, "audit target update failed");
       }
       const body: DeployAccepted = { deploymentId: result.deploymentId };
       return reply.code(202).send(body);

@@ -90,3 +90,19 @@ export function updateEventOutcome(
     throw new Error(`audit event ${id} not found`);
   }
 }
+
+/**
+ * Rewrites an event's target. Deploys audit fail-closed before the
+ * container is inspected, so the row starts as whatever the client sent
+ * (id or name); once the engine resolves the container, this pins the row
+ * to the stable name — the identity rollback rows and deployment history
+ * key on.
+ */
+export function updateEventTarget(id: number, target: string): void {
+  const result = getDb()
+    .prepare(`UPDATE audit_events SET target = ? WHERE id = ?`)
+    .run(target, id);
+  if (result.changes === 0) {
+    throw new Error(`audit event ${id} not found`);
+  }
+}

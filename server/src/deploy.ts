@@ -26,7 +26,7 @@ import type { Role } from "./types.js";
  */
 
 export type DeployRequestOutcome =
-  | { ok: true; deploymentId: number }
+  | { ok: true; deploymentId: number; containerName: string }
   | { ok: false; code: 404 | 409 | 422 | 502; error: string };
 
 export interface DeployRequestParams {
@@ -117,7 +117,7 @@ export async function requestDeploy(p: DeployRequestParams): Promise<DeployReque
   }
   active.set(spec.name, deploymentId);
   void runPipeline(deploymentId, spec, newImage, p.auditId, p.log);
-  return { ok: true, deploymentId };
+  return { ok: true, deploymentId, containerName: spec.name };
 }
 
 async function runPipeline(
