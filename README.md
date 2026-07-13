@@ -4,7 +4,7 @@ An internal operations dashboard for a Docker container fleet. Treats the
 containers on a host like machines in a small data center: one screen showing
 what's up, what's down, and what each machine is consuming — refreshed live.
 
-> **Status: Phase 3 (deployment workflow: deploy an image tag, watch health, one-click rollback).** See [Roadmap](#roadmap).
+> **Status: all planned phases complete (visibility → auth → logs → actions → deployments → CI/CD).** Remaining polish: README demo GIF. See [Roadmap](#roadmap).
 
 ![screenshot placeholder — add a demo GIF here after first run]
 
@@ -36,9 +36,10 @@ pipelines.
 - **`web/`** — React 18 + Vite + TypeScript (strict). A small `usePolling`
   hook refreshes fleet state every 5 s without flashing loading states, and
   pauses when the tab is hidden.
-- **API contract** — plain TypeScript interfaces, mirrored between
-  `server/src/types.ts` and `web/src/types.ts` (extracting these to a shared
-  package or generating from OpenAPI is on the roadmap).
+- **API contract** — plain TypeScript interfaces. `server/src/types.ts` is
+  the single source of truth; `web/src/types.ts` is generated from it by
+  `node scripts/sync-types.mjs`, and CI fails any PR where the mirror is
+  stale.
 
 ### Deliberate tradeoffs
 
@@ -141,7 +142,8 @@ with pagination and `actor`/`action` filters.
 - [x] **Phase 2 — actions:** start/stop/restart from the UI; socket mounted `rw`; role enforcement; mutating actions audited **fail-closed**
 - [x] **Phase 3 — deployment workflow:** pick an image tag, deploy per container with health watch and one-click rollback; deploys admin-only, audited fail-closed
 - [x] **Phase 3.5 — CI/CD:** GitHub Actions build → push image → deploy against the console
-- [ ] **Polish:** shared types package, web-package tests, README demo GIF
+- [x] **Polish — contract & tests:** single-source API types (generated mirror, CI-enforced); web package test suite
+- [ ] **Polish:** README demo GIF
 
 ## CI/CD
 

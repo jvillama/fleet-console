@@ -1,14 +1,11 @@
 ---
 name: sync-types
-description: Compare the hand-mirrored API contract types in server/src/types.ts and web/src/types.ts, report any drift, and reconcile them. Use after changing either file or when asked to check type sync.
+description: Regenerate or verify web/src/types.ts, which is generated from server/src/types.ts (the API contract's single source of truth). Use after changing server/src/types.ts or when asked to check type sync.
 ---
 
-`server/src/types.ts` and `web/src/types.ts` are hand-maintained duplicates of the API contract. Keep them semantically identical.
+`server/src/types.ts` is the single source of truth for the API contract; `web/src/types.ts` is generated from it. Never hand-edit the web copy.
 
-1. Read both files in full.
-2. Compare declaration by declaration (interfaces, type aliases, unions, field names, field types, optionality). Ignore differences that are intentionally one-sided:
-   - JSDoc comments may be richer on the server copy — that's fine.
-   - Server-only types that never cross the wire (e.g. `ApiError` if the web never consumes it) — flag them, but ask before copying them over.
-3. Report drift as a short list: declaration name, what differs, which side is newer/correct. Determine "correct" from usage — check `server/src/routes/` for what the API actually returns and `web/src/api.ts` / components for what the UI consumes.
-4. Apply the reconciliation: update the stale side to match. Never change the wire shape itself while syncing — if the two sides imply different API behavior, stop and ask which is intended.
-5. Run `npm run typecheck` in **both** packages and report the results.
+1. To verify: run `node scripts/sync-types.mjs --check` from the repo root. Exit 0 means in sync; exit 1 prints a line diff.
+2. To reconcile: run `node scripts/sync-types.mjs` (rewrites `web/src/types.ts`), then re-run `--check` to confirm exit 0.
+3. If the drift shows someone hand-edited `web/src/types.ts` with a change that should exist (e.g. a new field the UI needs), port that change into `server/src/types.ts` FIRST, then regenerate. Never change the wire shape itself while syncing — if the two sides imply different API behavior, stop and ask which is intended.
+4. Run `npm run typecheck` in **both** packages (`server/`, `web/`) and report the results.

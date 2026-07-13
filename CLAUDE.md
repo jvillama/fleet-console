@@ -21,7 +21,7 @@ Two independent npm packages, no workspaces — run npm commands inside `server/
 ## Gotchas
 
 - Server uses NodeNext module resolution: relative imports must end in `.js` (e.g. `./docker.js`) even though sources are `.ts`. Web uses bundler resolution: extensionless imports.
-- `server/src/types.ts` and `web/src/types.ts` are hand-mirrored API contract types — any change to one must be copied to the other.
+- `web/src/types.ts` is GENERATED from `server/src/types.ts` (the API contract's single source of truth). Edit the server copy, then run `node scripts/sync-types.mjs` from the repo root; CI's `contract` job fails when the mirror is stale. Never hand-edit the web copy.
 - Mutating routes live in `server/src/routes/actions.ts` and `server/src/routes/deployments.ts`: role-gate with `requireRole` (`operator` for actions, `admin` for deploy/rollback) and audit **fail-closed** via insert-then-update — copy that pattern for any new mutating endpoint. Deploys are async: the audit row settles when the pipeline finishes, not when the 202 goes out; deployment history and the single-flight guard key on container *name* (stable across recreates), not id.
 - Per-container failures degrade to "—" in the UI instead of failing the whole response — preserve that pattern in server routes.
 - Env vars (no .env.example): server `PORT` (4000), `HOST`, `DOCKER_SOCKET`, `NODE_ENV`, `FLEET_SESSION_SECRET` (required, ≥32 chars), `FLEET_USERS`/`FLEET_USERS_FILE`, `AUDIT_DB_PATH` (default `./data/audit.db`), `FLEET_COOKIE_SECURE`; web `VITE_API_TARGET` (dev proxy target).

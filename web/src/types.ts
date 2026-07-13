@@ -1,6 +1,6 @@
 /**
- * Mirror of server/src/types.ts — the API contract.
- * Keep the two files in sync (see note in the server copy).
+ * GENERATED FROM server/src/types.ts — DO NOT EDIT.
+ * Edit the server copy, then run: node scripts/sync-types.mjs
  */
 
 export type ContainerState =
@@ -14,12 +14,14 @@ export type ContainerState =
 
 export interface ContainerSummary {
   id: string;
+  /** Short 12-char id, convenient for display */
   shortId: string;
   name: string;
   image: string;
   state: ContainerState;
+  /** Human-readable status from Docker, e.g. "Up 3 hours" */
   status: string;
-  createdAt: string;
+  createdAt: string; // ISO 8601
   ports: PortMapping[];
 }
 
@@ -31,11 +33,12 @@ export interface PortMapping {
 
 export interface ContainerStats {
   id: string;
+  /** CPU usage as a percentage of one core (can exceed 100 on multi-core) */
   cpuPercent: number;
   memoryUsageBytes: number;
   memoryLimitBytes: number;
   memoryPercent: number;
-  sampledAt: string;
+  sampledAt: string; // ISO 8601
 }
 
 export interface FleetOverview {
@@ -46,7 +49,12 @@ export interface FleetOverview {
   hostName: string;
 }
 
-// --- Auth + audit (mirrored in server/src/types.ts) -----------------------
+export interface ApiError {
+  error: string;
+  detail?: string;
+}
+
+// --- Auth + audit ------------------------------------------------------
 
 export type Role = "admin" | "operator" | "viewer";
 
@@ -80,7 +88,7 @@ export interface AuditPage {
   total: number;
 }
 
-// --- Container actions (Phase 2, mirrored in server/src/types.ts) ------
+// --- Container actions (Phase 2) ----------------------------------------
 
 export type ContainerAction = "start" | "stop" | "restart";
 
@@ -91,7 +99,7 @@ export interface ContainerActionResult {
   state: ContainerState;
 }
 
-// --- Deployments (Phase 3, mirrored in server/src/types.ts) ---------------
+// --- Deployments (Phase 3) ----------------------------------------------
 
 export type DeploymentStatus =
   | "pending"      // row created, pipeline not yet started

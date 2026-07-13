@@ -47,6 +47,15 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # Fails the PR when web/src/types.ts is stale relative to the source of
+  # truth (server/src/types.ts). Dependency-free script — no npm ci needed.
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: node scripts/sync-types.mjs --check
+
   # Builds both container images on every run (a broken Dockerfile fails
   # the PR); pushes to GHCR only on push events, which this workflow
   # receives only for main. Tests and lint gate the push via needs.

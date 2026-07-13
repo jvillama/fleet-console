@@ -1,9 +1,9 @@
 /**
- * API contract types.
+ * API contract types — single source of truth.
  *
- * NOTE: web/src/types.ts mirrors this file. If you change a type here,
- * change it there too. (Phase 2 improvement: extract to a shared package
- * or generate from an OpenAPI schema — good interview talking point.)
+ * web/src/types.ts is GENERATED from this file. After editing, run:
+ *   node scripts/sync-types.mjs
+ * CI (the `contract` job) fails when the mirror is stale.
  */
 
 export type ContainerState =
@@ -57,7 +57,7 @@ export interface ApiError {
   detail?: string;
 }
 
-// --- Auth + audit (mirrored in web/src/types.ts) -----------------------
+// --- Auth + audit ------------------------------------------------------
 
 export type Role = "admin" | "operator" | "viewer";
 
@@ -91,7 +91,7 @@ export interface AuditPage {
   total: number;
 }
 
-// --- Container actions (Phase 2, mirrored in web/src/types.ts) ---------
+// --- Container actions (Phase 2) ----------------------------------------
 
 export type ContainerAction = "start" | "stop" | "restart";
 
@@ -102,7 +102,7 @@ export interface ContainerActionResult {
   state: ContainerState;
 }
 
-// --- Deployments (Phase 3, mirrored in web/src/types.ts) ---------------
+// --- Deployments (Phase 3) ----------------------------------------------
 
 export type DeploymentStatus =
   | "pending"      // row created, pipeline not yet started
