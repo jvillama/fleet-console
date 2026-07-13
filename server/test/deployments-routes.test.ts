@@ -19,6 +19,10 @@ vi.mock("../src/docker.js", () => ({
   recreateContainer: vi.fn(),
   removeContainer: vi.fn(),
   watchHealth: vi.fn(),
+  // Pure helper — keep the real formula (a plain function, so
+  // vi.resetAllMocks() can't blank it) instead of stubbing it.
+  parkedContainerName: (name: string, deploymentId: number) =>
+    `${name}-predeploy-${deploymentId}`,
 }));
 
 import * as dockerApi from "../src/docker.js";

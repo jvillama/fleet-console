@@ -15,6 +15,10 @@ vi.mock("../src/docker.js", () => ({
   recreateContainer: vi.fn(),
   removeContainer: vi.fn(),
   watchHealth: vi.fn(),
+  // Pure helper — keep the real formula (a plain function, so
+  // vi.resetAllMocks() can't blank it) instead of stubbing it.
+  parkedContainerName: (name: string, deploymentId: number) =>
+    `${name}-predeploy-${deploymentId}`,
 }));
 
 import * as dockerApi from "../src/docker.js";
@@ -288,10 +292,86 @@ describe("requestDeploy — pipeline", () => {
 
     await waitForStatus(result.deploymentId, "failed");
     expect(getDeployment(result.deploymentId)).toMatchObject({
-      detail: "container reported unhealthy",
+      detail: `container reported unhealthy; previous container parked as web-1-predeploy-${result.deploymentId}`,
       newContainerId: "newid987",
     });
     expect(mocked.removeContainer).not.toHaveBeenCalled();
+  });
+
+  it("a failure before the recreate does not mention a parked container", async () => {
+    mocked.inspectForRecreate.mockResolvedValue(spec());
+    mocked.pullImage.mockRejectedValue(new Error("manifest unknown"));
+    mocked.imageExistsLocally.mockResolvedValue(false);
+
+    const result = await requestDeploy(baseParams(auditRow()));
+    if (!result.ok) throw new Error("expected ok");
+
+    await waitForStatus(result.deploymentId, "failed");
+    expect(getDeployment(result.deploymentId)?.detail).toBe("manifest unknown");
+  });
+
+  it("success detail notes when the parked container could not be removed", async () => {
+    mocked.inspectForRecreate.mockResolvedValue(spec());
+    mocked.pullImage.mockResolvedValue(undefined);
+    mocked.recreateContainer.mockResolvedValue("newid987");
+    mocked.watchHealth.mockResolvedValue({ healthy: true });
+    mocked.removeContainer.mockRejectedValue(new Error("device busy"));
+
+    const result = await requestDeploy(baseParams(auditRow()));
+    if (!result.ok) throw new Error("expected ok");
+
+    await waitForStatus(result.deploymentId, "succeeded");
+    expect(getDeployment(result.deploymentId)?.detail).toBe(
+      `nginx:1.27 → nginx:1.28; parked container web-1-predeploy-${result.deploymentId} not removed`,
+    );
+  });
+
+  it("a successful rollback removes the rolled-back deployment's parked container", async () => {
+    happyMocks();
+
+    const result = await requestDeploy({
+      container: "oldid123",
+      image: "nginx:1.26",
+      rollbackOf: 41,
+      actor: "alice",
+      role: "admin",
+      auditId: auditRow(),
+      log,
+    });
+    if (!result.ok) throw new Error("expected ok");
+
+    await waitForStatus(result.deploymentId, "succeeded");
+    expect(mocked.removeContainer).toHaveBeenCalledWith("oldid123");
+    expect(mocked.removeContainer).toHaveBeenCalledWith("web-1-predeploy-41");
+  });
+
+  it("rollback cleanup swallows 404 (nothing was parked) and keeps a clean detail", async () => {
+    mocked.inspectForRecreate.mockResolvedValue(spec());
+    mocked.pullImage.mockResolvedValue(undefined);
+    mocked.recreateContainer.mockResolvedValue("newid987");
+    mocked.watchHealth.mockResolvedValue({ healthy: true });
+    mocked.removeContainer.mockImplementation((id: string) => {
+      if (id === "web-1-predeploy-41") {
+        return Promise.reject(
+          Object.assign(new Error("no such container"), { statusCode: 404 }),
+        );
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const result = await requestDeploy({
+      container: "oldid123",
+      image: "nginx:1.26",
+      rollbackOf: 41,
+      actor: "alice",
+      role: "admin",
+      auditId: auditRow(),
+      log,
+    });
+    if (!result.ok) throw new Error("expected ok");
+
+    await waitForStatus(result.deploymentId, "succeeded");
+    expect(getDeployment(result.deploymentId)?.detail).toBe("nginx:1.27 → nginx:1.26");
   });
 
   it("a new deploy is allowed after the previous one settles", async () => {

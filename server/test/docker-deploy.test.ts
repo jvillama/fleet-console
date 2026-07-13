@@ -24,12 +24,19 @@ vi.mock("dockerode", () => ({
 import {
   imageExistsLocally,
   inspectForRecreate,
+  parkedContainerName,
   pullImage,
   recreateContainer,
   removeContainer,
   watchHealth,
   type RecreateSpec,
 } from "../src/docker.js";
+
+describe("parkedContainerName", () => {
+  it("matches the name recreateContainer parks under", () => {
+    expect(parkedContainerName("web-1", 7)).toBe("web-1-predeploy-7");
+  });
+});
 
 function inspectFixture(overrides: Record<string, unknown> = {}) {
   return {
