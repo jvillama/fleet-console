@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+# One run per ref: PR pushes cancel the outdated run; main pushes queue
+# instead, so `latest` on GHCR always reflects the newest merge.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   server:
     runs-on: ubuntu-latest
@@ -58,11 +64,13 @@ jobs:
 
   # Builds both container images on every run (a broken Dockerfile fails
   # the PR); pushes to GHCR only on push events, which this workflow
-  # receives only for main. Tests and lint gate the push via needs.
+  # receives only for main. Tests, lint, and the types-mirror check gate
+  # the push via needs — a stale mirror must not publish on a direct push
+  # to main.
   images:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [server, web]
+    needs: [server, web, contract]
     permissions:
       contents: read
       packages: write

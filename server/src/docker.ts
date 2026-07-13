@@ -184,7 +184,8 @@ export interface LogStream {
  * Live log stream for one container: last `tail` lines, then follow.
  * TTY containers emit plain text; non-TTY containers use Docker's
  * multiplexed framing, which is demuxed here so callers always get text.
- * close() destroys the daemon connection so it stops following.
+ * close() destroys the daemon connection so it stops following (and, for
+ * non-TTY containers, the demuxed stream so consumers see the teardown).
  */
 export async function streamContainerLogs(
   id: string,

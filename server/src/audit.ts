@@ -1,5 +1,5 @@
 import { getDb } from "./db.js";
-import type { AuditEvent, AuditPage, Role } from "./types.js";
+import type { AuditEvent, AuditOutcome, AuditPage, Role } from "./types.js";
 
 /**
  * Audit log storage. Table access lives here; the SQLite connection and
@@ -14,7 +14,7 @@ export interface NewAuditEvent {
   actor: string;
   role: Role | null;
   action: string;
-  outcome: "success" | "failure";
+  outcome: AuditOutcome;
   target?: string;
   ip?: string;
   detail?: string;
@@ -80,7 +80,7 @@ export function queryEvents(q: AuditQuery): AuditPage {
  */
 export function updateEventOutcome(
   id: number,
-  outcome: "success" | "failure",
+  outcome: AuditOutcome,
   detail?: string,
 ): void {
   const result = getDb()

@@ -58,6 +58,8 @@ export interface ApiError {
 
 export type Role = "admin" | "operator" | "viewer";
 
+export type AuditOutcome = "success" | "failure";
+
 export interface SessionUser {
   username: string;
   role: Role;
@@ -78,7 +80,7 @@ export interface AuditEvent {
   action: string;
   /** Null for auth events; container id for Phase 2 container actions. */
   target: string | null;
-  outcome: "success" | "failure";
+  outcome: AuditOutcome;
   ip: string | null;
   detail: string | null;
 }

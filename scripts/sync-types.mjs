@@ -23,6 +23,15 @@ const GENERATED_HEADER = `/**
 
 const normalize = (text) => text.replace(/\r\n/g, "\n");
 
+// Strict args: a typo like `--chek` must not silently rewrite the mirror.
+const args = process.argv.slice(2);
+const unknown = args.filter((a) => a !== "--check");
+if (unknown.length > 0) {
+  console.error(`unknown argument(s): ${unknown.join(" ")}`);
+  console.error("usage: node scripts/sync-types.mjs [--check]");
+  process.exit(2);
+}
+
 const source = normalize(readFileSync(sourcePath, "utf8"));
 // The mirror gets its own header in place of the source file's.
 const body = source.replace(/^\/\*\*[\s\S]*?\*\/\n/, "");
@@ -41,15 +50,27 @@ if (process.argv.includes("--check")) {
     process.exit(0);
   }
   console.error("web/src/types.ts is stale — run: node scripts/sync-types.mjs\n");
+  // Pairwise compare: an insertion misaligns every later line, so cap the
+  // output instead of flooding the log with the whole file.
+  const MAX_MISMATCHES = 20;
   const actualLines = actual.split("\n");
   const expectedLines = expected.split("\n");
   const count = Math.max(actualLines.length, expectedLines.length);
+  let shown = 0;
+  let total = 0;
   for (let i = 0; i < count; i++) {
     if (actualLines[i] !== expectedLines[i]) {
-      console.error(`line ${i + 1}:`);
-      console.error(`  expected: ${expectedLines[i] ?? "<missing>"}`);
-      console.error(`  actual:   ${actualLines[i] ?? "<missing>"}`);
+      total++;
+      if (shown < MAX_MISMATCHES) {
+        console.error(`line ${i + 1}:`);
+        console.error(`  expected: ${expectedLines[i] ?? "<missing>"}`);
+        console.error(`  actual:   ${actualLines[i] ?? "<missing>"}`);
+        shown++;
+      }
     }
+  }
+  if (total > shown) {
+    console.error(`…and ${total - shown} more mismatched lines`);
   }
   process.exit(1);
 }
