@@ -99,6 +99,6 @@ describe("RowActions deploy flow", () => {
     await u.click(screen.getByRole("button", { name: "Deploy tag" }));
 
     expect(onDeployStarted).not.toHaveBeenCalled();
-    expect(screen.getByText(/HTTP 409/)).toBeInTheDocument();
+    expect(screen.getByText(/conflict/)).toBeInTheDocument();
   });
 });

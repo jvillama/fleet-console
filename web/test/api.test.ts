@@ -35,13 +35,30 @@ describe("request wrapper", () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it("throws with the status on other failures without firing the handler", async () => {
+  it("throws the server's error message without firing the handler", async () => {
     stubFetch({ "/api/overview": jsonResponse({ error: "boom" }, 502) });
     const handler = vi.fn();
     setUnauthorizedHandler(handler);
 
-    await expect(api.overview()).rejects.toThrow("HTTP 502");
+    await expect(api.overview()).rejects.toThrow("boom");
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("prefers the more specific detail over the generic error", async () => {
+    stubFetch({
+      "/api/overview": jsonResponse(
+        { error: "Action failed", detail: "invalid mount" },
+        502,
+      ),
+    });
+
+    await expect(api.overview()).rejects.toThrow("invalid mount");
+  });
+
+  it("falls back to path and status when the error body is not JSON", async () => {
+    stubFetch({ "/api/overview": new Response("nope", { status: 502 }) });
+
+    await expect(api.overview()).rejects.toThrow("/api/overview → HTTP 502");
   });
 
   it("resolves undefined for 204 responses", async () => {
@@ -115,11 +132,11 @@ describe("containerAction", () => {
     expect(calls[0]?.init?.method).toBe("POST");
   });
 
-  it("rejects with the HTTP status on failure", async () => {
+  it("rejects with the server's error message on failure", async () => {
     stubFetch({
       "/api/containers/abc123/start": jsonResponse({ error: "Action failed" }, 502),
     });
 
-    await expect(api.containerAction("abc123", "start")).rejects.toThrow("502");
+    await expect(api.containerAction("abc123", "start")).rejects.toThrow("Action failed");
   });
 });
