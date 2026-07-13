@@ -11,6 +11,26 @@ function closeReason(err: unknown): string {
 }
 
 /**
+ * Cross-Site WebSocket Hijacking guard. Browsers always send Origin on a
+ * WS handshake; SameSite=Strict already keeps the session cookie off
+ * cross-site upgrades, so this is defense-in-depth. Requests without an
+ * Origin header (curl, wscat, tests) pass — they are not browsers and
+ * cannot ride a victim's cookie jar.
+ */
+export function sameOrigin(
+  origin: string | undefined,
+  host: string | undefined,
+): boolean {
+  if (origin === undefined) return true;
+  if (host === undefined) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Splits a chunked byte stream into lines. Strips a trailing \r per line,
  * truncates lines over MAX_LINE_CHARS, and force-flushes an over-long
  * buffer so a newline-free stream cannot grow memory unbounded.
@@ -66,6 +86,20 @@ export function logsRoutes(app: FastifyInstance): void {
 
       // The gate guarantees a session before this handler runs.
       const user = request.session.get("user");
+
+      if (!sameOrigin(request.headers.origin, request.headers.host)) {
+        auditFailOpen(request, {
+          actor: user?.username ?? "unknown",
+          role: user?.role ?? null,
+          action: "container.logs",
+          outcome: "failure",
+          target: id,
+          ip: request.ip,
+          detail: `cross-origin websocket rejected: ${request.headers.origin ?? ""}`.slice(0, 200),
+        });
+        socket.close(1008, "Origin not allowed");
+        return;
+      }
 
       let logs;
       try {
