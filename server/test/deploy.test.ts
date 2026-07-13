@@ -190,9 +190,9 @@ describe("requestDeploy — pipeline", () => {
     const auditId = auditRow();
 
     const result = await requestDeploy(baseParams(auditId));
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- vitest's expect.any() is typed `any`
     expect(result).toEqual({
       ok: true,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- vitest's expect.any() is typed `any`
       deploymentId: expect.any(Number),
       containerName: "web-1",
     });
