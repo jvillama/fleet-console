@@ -158,7 +158,10 @@ Consuming the images: `docker compose pull && docker compose up -d`
 fetches `latest` (the compose file still builds locally with
 `up --build`, so the offline dev loop is unchanged) — or roll a single
 container between `sha-*` tags from fleet-console's own deploy UI, which
-is the dogfood path.
+is the dogfood path. GHCR packages are **private by default**, so pulls
+fail with `unauthorized` until you either flip both packages to public in
+the GitHub UI or `docker login ghcr.io` with a classic PAT that has the
+`read:packages` scope.
 
 A manual **Deploy** workflow (`Actions → Deploy → Run workflow`) calls the
 console's deploy API for a chosen container and tag. It needs three repo
@@ -197,4 +200,6 @@ console mid-deploy (same no-self-guard policy as Phase 2); and data in
 anonymous volumes not listed in `HostConfig.Binds` does not survive the
 recreate — use named volumes for anything you care about. A failed image
 pull falls back to a locally present copy of the tag, so rollback keeps
-working when the registry is unreachable.
+working when the registry is unreachable. Note that deploying a stopped
+container starts it: the recreated container is always started so the
+health watch can judge it.

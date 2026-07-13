@@ -14,7 +14,7 @@ export interface UserRecord {
   passwordHash: string;
 }
 
-const ROLES: readonly string[] = ["admin", "operator", "viewer"];
+const ROLES: readonly Role[] = ["admin", "operator", "viewer"];
 
 export function hashPassword(password: string): string {
   const salt = randomBytes(16);

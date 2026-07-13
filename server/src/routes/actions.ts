@@ -13,6 +13,7 @@ import { recordEvent, updateEventOutcome } from "../audit.js";
 import { requireRole } from "../authz.js";
 import type {
   ApiError,
+  AuditOutcome,
   ContainerAction,
   ContainerActionResult,
 } from "../types.js";
@@ -42,7 +43,7 @@ async function validateId(
 function settleAudit(
   request: ActionRequest,
   auditId: number,
-  outcome: "success" | "failure",
+  outcome: AuditOutcome,
   detail?: string,
 ): void {
   try {

@@ -3,7 +3,12 @@ import { recordEvent, updateEventOutcome } from "../audit.js";
 import { requireRole } from "../authz.js";
 import { requestDeploy } from "../deploy.js";
 import { getDeployment, queryDeployments } from "../deployments.js";
-import type { ApiError, DeployAccepted, DeployRequest } from "../types.js";
+import type {
+  ApiError,
+  AuditOutcome,
+  DeployAccepted,
+  DeployRequest,
+} from "../types.js";
 
 /**
  * Phase 3 deployment routes. The two POSTs audit FAIL-CLOSED like
@@ -20,7 +25,7 @@ const TAG_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$/;
 function settleAudit(
   request: FastifyRequest,
   auditId: number,
-  outcome: "success" | "failure",
+  outcome: AuditOutcome,
   detail?: string,
 ): void {
   try {
