@@ -98,7 +98,7 @@ describe("RowActions deploy flow", () => {
     await u.type(screen.getByPlaceholderText("new tag"), "1.28");
     await u.click(screen.getByRole("button", { name: "Deploy tag" }));
 
+    expect(await screen.findByText(/conflict/)).toBeInTheDocument();
     expect(onDeployStarted).not.toHaveBeenCalled();
-    expect(screen.getByText(/conflict/)).toBeInTheDocument();
   });
 });
