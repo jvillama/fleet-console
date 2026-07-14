@@ -262,7 +262,7 @@ describe("FleetTable actions", () => {
     await user.click(screen.getByRole("button", { name: "Start" }));
 
     const row = rowFor("worker-1");
-    expect(await within(row).findByText(/HTTP 502/)).toBeInTheDocument();
+    expect(await within(row).findByText(/Action failed/)).toBeInTheDocument();
     // No global banner — the table itself stays rendered.
     expect(screen.queryByRole("alert")).toBeNull();
   });

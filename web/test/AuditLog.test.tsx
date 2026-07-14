@@ -94,6 +94,6 @@ describe("AuditLog", () => {
 
     render(<AuditLog />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("HTTP 502");
+    expect(await screen.findByRole("alert")).toHaveTextContent("down");
   });
 });

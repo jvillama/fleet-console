@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type {
+  ApiError,
   AuditPage,
   ContainerAction,
   ContainerActionResult,
@@ -27,7 +28,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(`${path} → HTTP 401`);
   }
   if (!res.ok) {
-    throw new Error(`${path} → HTTP ${res.status}`);
+    // Surface what the server actually said: ApiError bodies carry a
+    // human-readable `error` and sometimes a more specific `detail`.
+    const body = (await res.json().catch(() => null)) as Partial<ApiError> | null;
+    throw new Error(body?.detail ?? body?.error ?? `${path} → HTTP ${res.status}`);
   }
   if (res.status === 204) {
     return undefined as T;

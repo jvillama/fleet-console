@@ -19,6 +19,10 @@ vi.mock("../src/docker.js", () => ({
   recreateContainer: vi.fn(),
   removeContainer: vi.fn(),
   watchHealth: vi.fn(),
+  // Pure helper — keep the real formula (a plain function, so
+  // vi.resetAllMocks() can't blank it) instead of stubbing it.
+  parkedContainerName: (name: string, deploymentId: number) =>
+    `${name}-predeploy-${deploymentId}`,
 }));
 
 import * as dockerApi from "../src/docker.js";
@@ -100,7 +104,9 @@ describe("POST /api/containers/:id/deploy", () => {
     expect(event).toMatchObject({
       actor: "alice",
       role: "admin",
-      target: "oldid123",
+      // The deploy was requested by container id, but the settled row
+      // carries the stable name — the identity history keys on.
+      target: "web-1",
       outcome: "success",
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- vitest's expect.any() is typed `any`
       ip: expect.any(String),
@@ -155,7 +161,12 @@ describe("POST /api/containers/:id/deploy", () => {
     expect(res.statusCode).toBe(404);
     expect(res.json()).toEqual({ error: "Container not found" });
     const [event] = queryEvents({ limit: 1, offset: 0, action: "container.deploy" }).events;
-    expect(event).toMatchObject({ outcome: "failure", detail: "Container not found" });
+    // Unresolvable container: the row keeps whatever the client sent.
+    expect(event).toMatchObject({
+      outcome: "failure",
+      detail: "Container not found",
+      target: "oldid123",
+    });
   });
 
   it("422 when the container already runs the requested tag", async () => {

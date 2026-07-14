@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { closeDb, initDb } from "../src/db.js";
-import { queryEvents, recordEvent, updateEventOutcome } from "../src/audit.js";
+import {
+  queryEvents,
+  recordEvent,
+  updateEventOutcome,
+  updateEventTarget,
+} from "../src/audit.js";
 
 beforeEach(() => {
   initDb(":memory:");
@@ -135,5 +140,26 @@ describe("recordEvent return value / updateEventOutcome", () => {
 
   it("throws for a missing row id", () => {
     expect(() => updateEventOutcome(999, "success")).toThrow(/not found/);
+  });
+});
+
+describe("updateEventTarget", () => {
+  it("rewrites the target of an existing event", () => {
+    const id = recordEvent({
+      actor: "alice",
+      role: "admin",
+      action: "container.deploy",
+      target: "oldid123",
+      outcome: "failure",
+    });
+
+    updateEventTarget(id, "web-1");
+
+    const [event] = queryEvents({ limit: 1, offset: 0 }).events;
+    expect(event).toMatchObject({ id, target: "web-1" });
+  });
+
+  it("throws when the event does not exist", () => {
+    expect(() => updateEventTarget(99999, "web-1")).toThrow(/not found/);
   });
 });

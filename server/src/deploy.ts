@@ -8,6 +8,7 @@ import {
 import {
   imageExistsLocally,
   inspectForRecreate,
+  parkedContainerName,
   pullImage,
   recreateContainer,
   removeContainer,
@@ -26,7 +27,7 @@ import type { Role } from "./types.js";
  */
 
 export type DeployRequestOutcome =
-  | { ok: true; deploymentId: number }
+  | { ok: true; deploymentId: number; containerName: string }
   | { ok: false; code: 404 | 409 | 422 | 502; error: string };
 
 export interface DeployRequestParams {
@@ -116,8 +117,8 @@ export async function requestDeploy(p: DeployRequestParams): Promise<DeployReque
     };
   }
   active.set(spec.name, deploymentId);
-  void runPipeline(deploymentId, spec, newImage, p.auditId, p.log);
-  return { ok: true, deploymentId };
+  void runPipeline(deploymentId, spec, newImage, p.auditId, p.rollbackOf, p.log);
+  return { ok: true, deploymentId, containerName: spec.name };
 }
 
 async function runPipeline(
@@ -125,8 +126,14 @@ async function runPipeline(
   spec: RecreateSpec,
   newImage: string,
   auditId: number,
+  rollbackOf: number | undefined,
   log: FastifyBaseLogger,
 ): Promise<void> {
+  const parked = parkedContainerName(spec.name, deploymentId);
+  // True once recreateContainer has resolved: from then on the old
+  // container sits under the parked name (recreate failures rename it
+  // back themselves before rethrowing).
+  let oldIsParked = false;
   try {
     updateDeploymentStatus(deploymentId, "pulling");
     try {
@@ -141,31 +148,69 @@ async function runPipeline(
 
     updateDeploymentStatus(deploymentId, "recreating");
     const newContainerId = await recreateContainer(spec, newImage, deploymentId);
+    oldIsParked = true;
 
     updateDeploymentStatus(deploymentId, "watching", { newContainerId });
     const health = await watchHealth(newContainerId);
     if (!health.healthy) {
-      // The replacement stays up for debugging; rollback is one click away.
-      settle(deploymentId, auditId, "failed", health.reason ?? "health check failed", log);
+      // The replacement stays up for debugging; rollback is one click
+      // away. The old container stays parked — name it so the operator
+      // can find it instead of discovering it in `docker ps -a` later.
+      settle(
+        deploymentId,
+        auditId,
+        "failed",
+        `${health.reason ?? "health check failed"}; previous container parked as ${parked}`,
+        log,
+      );
       return;
     }
 
+    let detail = `${spec.image} → ${newImage}`;
     try {
       await removeContainer(spec.id);
+      oldIsParked = false;
     } catch (err) {
       log.warn({ err, container: spec.id }, "parked container cleanup failed");
+      detail += `; parked container ${parked} not removed`;
     }
-    settle(deploymentId, auditId, "succeeded", `${spec.image} → ${newImage}`, log);
+    if (rollbackOf !== undefined) {
+      await removeParkedLeftover(spec.name, rollbackOf, log);
+    }
+    settle(deploymentId, auditId, "succeeded", detail, log);
   } catch (err) {
+    const message = err instanceof Error ? err.message : "deployment failed";
     settle(
       deploymentId,
       auditId,
       "failed",
-      err instanceof Error ? err.message : "deployment failed",
+      oldIsParked ? `${message}; previous container parked as ${parked}` : message,
       log,
     );
   } finally {
     active.delete(spec.name);
+  }
+}
+
+/**
+ * A successful rollback makes the parked container from the deployment it
+ * rolls back redundant — the fleet is back on the old image. Best-effort:
+ * 404 is the common case (rolling back a *succeeded* deployment, which
+ * cleaned up after itself), so only unexpected failures are logged.
+ */
+async function removeParkedLeftover(
+  name: string,
+  rollbackOf: number,
+  log: FastifyBaseLogger,
+): Promise<void> {
+  const leftover = parkedContainerName(name, rollbackOf);
+  try {
+    await removeContainer(leftover);
+    log.info({ container: leftover }, "removed rolled-back deployment's parked container");
+  } catch (err) {
+    if ((err as { statusCode?: number }).statusCode !== 404) {
+      log.warn({ err, container: leftover }, "parked leftover cleanup failed");
+    }
   }
 }
 

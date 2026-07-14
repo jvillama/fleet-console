@@ -40,7 +40,7 @@ function mockLogStream() {
   return { stream, close };
 }
 
-function openSocket(id = "abc123") {
+function openSocket(id = "abc123", extraHeaders: Record<string, string> = {}) {
   // cookies.session is the *decoded* value (set-cookie-parser undoes the
   // percent-encoding @fastify/cookie applies on the wire); injectWS's raw
   // headers option doesn't re-encode for us the way app.inject({ cookies })
@@ -48,7 +48,10 @@ function openSocket(id = "abc123") {
   // own ";"-separated parsing (secure-session's cipher;nonce value contains
   // a literal ";").
   return app.injectWS(`/api/logs/${id}`, {
-    headers: { cookie: `session=${encodeURIComponent(cookies.session)}` },
+    headers: {
+      cookie: `session=${encodeURIComponent(cookies.session)}`,
+      ...extraHeaders,
+    },
     // A real upgrade gets req.socket for free from Node's HTTP server;
     // injectWS's fake request doesn't set one, and request.ip (used by the
     // audit call) reads raw.socket.remoteAddress under trustProxy — supply
@@ -86,6 +89,46 @@ describe("GET /api/logs/:id (websocket)", () => {
     expect(closed).toEqual({ code: 1008, reason: "Invalid container id" });
     expect(mocked.streamContainerLogs).not.toHaveBeenCalled();
     expect(auditPage().total).toBe(0);
+  });
+
+  it("closes 1008 on a cross-origin upgrade, audits it, docker untouched", async () => {
+    mockLogStream();
+
+    const ws = await openSocket("abc123", { origin: "http://evil.example" });
+    const closed = await onClose(ws);
+
+    expect(closed).toEqual({ code: 1008, reason: "Origin not allowed" });
+    expect(mocked.streamContainerLogs).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(auditPage().total).toBe(1));
+    expect(auditPage().events[0]).toMatchObject({
+      actor: "alice",
+      action: "container.logs",
+      outcome: "failure",
+      detail: "cross-origin websocket rejected: http://evil.example",
+    });
+  });
+
+  it("closes 1008 on a malformed Origin header", async () => {
+    mockLogStream();
+
+    const ws = await openSocket("abc123", { origin: "not-a-url" });
+    const closed = await onClose(ws);
+
+    expect(closed).toEqual({ code: 1008, reason: "Origin not allowed" });
+    expect(mocked.streamContainerLogs).not.toHaveBeenCalled();
+  });
+
+  it("allows a same-origin upgrade", async () => {
+    mockLogStream();
+
+    const ws = await openSocket("abc123", {
+      host: "console.test",
+      origin: "http://console.test",
+    });
+    await vi.waitFor(() => expect(auditPage().total).toBe(1));
+
+    expect(auditPage().events[0]).toMatchObject({ outcome: "success" });
+    ws.close();
   });
 
   it("audits the stream open with actor, target, and ip", async () => {

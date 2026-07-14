@@ -296,6 +296,13 @@ export async function inspectForRecreate(idOrName: string): Promise<RecreateSpec
   };
 }
 
+/** Where recreateContainer parks the replaced container. deploy.ts uses
+ * this to name leftovers in deployment details and to clean them up on
+ * rollback — keep the two sides of the contract in one place. */
+export function parkedContainerName(name: string, deploymentId: number): string {
+  return `${name}-predeploy-${deploymentId}`;
+}
+
 /**
  * Replace a container with a copy running newImage: stop → rename (frees
  * the name) → create + start the replacement. If anything fails after the
@@ -309,7 +316,7 @@ export async function recreateContainer(
   deploymentId: number,
 ): Promise<string> {
   const old = docker.getContainer(spec.id);
-  const parkedName = `${spec.name}-predeploy-${deploymentId}`;
+  const parkedName = parkedContainerName(spec.name, deploymentId);
 
   if (spec.wasRunning) {
     try {
