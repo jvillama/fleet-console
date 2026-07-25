@@ -87,13 +87,18 @@ cd server && npm run hash-password -- "s3cret"
 # → scrypt:9f3a…:c41b…
 ```
 
-**2. Configure users and a session secret.** For `docker compose`, put them
-in a `.env` file next to `docker-compose.yml`:
+**2. Configure users and a session secret.** Put them in a `.env` file next
+to `docker-compose.yml`:
 
 ```bash
-FLEET_SESSION_SECRET=<any random string, 32+ characters>
+FLEET_SESSION_SECRET="<any random string, 32+ characters>"
 FLEET_USERS=[{"username":"alice","role":"admin","passwordHash":"scrypt:…"}]
 ```
+
+`docker compose` reads that file, and so do `npm run dev` / `npm start` in
+`server/` (via Node's `--env-file-if-exists=../.env`) — one file for both
+ways of running the stack. Quote any value containing `#`: both parsers
+otherwise treat it as the start of a comment and hand you an empty string.
 
 | Env var | Purpose | Default |
 |---|---|---|

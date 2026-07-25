@@ -3,5 +3,8 @@ dist/
 *.log
 *.tsbuildinfo
 .env
+# Local audit DB: AUDIT_DB_PATH defaults to ./data/audit.db, so running the
+# server outside compose writes real audit history here (plus -wal/-shm).
+server/data/
 .DS_Store
 .claude/settings.local.json
