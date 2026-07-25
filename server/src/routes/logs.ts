@@ -65,6 +65,59 @@ export function createLineForwarder(send: (line: string) => void): {
   };
 }
 
+/** Bytes of queued frames at which we stop sending. */
+const HIGH_WATER = 1024 * 1024;
+/** …and the mark the queue must drain back under before we resume. */
+const LOW_WATER = 256 * 1024;
+
+/** The slice of a WebSocket the send gate needs. */
+interface SendTarget {
+  readonly readyState: number;
+  readonly OPEN: number;
+  readonly bufferedAmount: number;
+  send: (data: string) => void;
+}
+
+/**
+ * Bounds the memory one slow client can cost us. `socket.send()` never
+ * blocks — ws queues the frame and reports the backlog in bufferedAmount —
+ * so a container logging faster than a client drains grows that queue
+ * without limit. Above HIGH_WATER we stop sending and count the loss;
+ * once the queue drains under LOW_WATER we resume and report the gap
+ * in-band. Two marks rather than one: a client hovering at a single
+ * threshold would emit a notice on nearly every line.
+ *
+ * Lossy by design. The panel keeps only the last 2000 lines, so frames a
+ * far-behind client would discard on arrival aren't worth the memory.
+ */
+export function createSendGate(socket: SendTarget): {
+  send: (line: string) => void;
+  finish: () => void;
+} {
+  let dropped = 0;
+  let suppressed = false;
+
+  return {
+    send(line) {
+      if (socket.readyState !== socket.OPEN) return;
+      if (socket.bufferedAmount >= (suppressed ? LOW_WATER : HIGH_WATER)) {
+        suppressed = true;
+        dropped += 1;
+        return;
+      }
+      suppressed = false;
+      if (dropped > 0) {
+        socket.send(`⚠ ${dropped} lines dropped (slow client)`);
+        dropped = 0;
+      }
+      socket.send(line);
+    },
+    finish() {
+      // Task 2 fills this in.
+    },
+  };
+}
+
 /**
  * Live container logs over WebSocket. Session required via the global gate
  * (the cookie rides the upgrade request). One fail-open audit event per
