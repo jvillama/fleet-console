@@ -261,7 +261,15 @@ export function logsRoutes(app: FastifyInstance): void {
       });
 
       if (socket.readyState !== socket.OPEN) {
-        // Client vanished while the stream was opening.
+        // Client vanished while the stream was opening. If the socket closed
+        // before this handler body ran, the "close" listener registered
+        // above never fires again — this explicit release() is the only
+        // thing that returns the slot. That timing can't be exercised
+        // through @fastify/websocket's injectWS test harness (its fake
+        // socket pair only fires a server-side "close" via .terminate(),
+        // and this code path always runs before a test could call that), so
+        // don't delete this call as dead code just because coverage can't
+        // reach it.
         release();
         logs.close();
         return;

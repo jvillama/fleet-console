@@ -172,7 +172,30 @@ deliberate trade-off: a client holding 5 streams open and looping on a
 distinct authenticated client decision and worth recording, and because
 this route has no rate-limit window to hang a dedupe on. If audit volume
 ever becomes a problem, the dedupe map pattern in `ratelimit.ts` drops in
-unchanged.
+unchanged. Note this makes the loop faster than it used to be: a rejection
+now returns without the Docker round-trip that used to pace an open loop,
+so the accepted "one audit row per rejected attempt" costs more rows per
+second than the same loop used to before this cap existed.
+
+### The heartbeat gap
+
+The route has no WS ping/pong keepalive, so a socket whose peer vanished
+without a clean close (a slept laptop, a dropped Wi-Fi network) holds its
+stream slot until something else notices. `createSendGate` is not that
+something — it suppresses sends once `bufferedAmount` passes
+`HIGH_WATER`, which is exactly the state a zombie peer with a full send
+queue produces, so the server's only per-line dead-peer signal shuts
+itself off instead of catching this case.
+
+What currently bounds a stranded slot is `proxy_read_timeout 1h` at
+`web/nginx.conf:32`, which closes the idle upstream connection after an
+hour. That bound exists only because of the bundled nginx; a deployment
+that puts the server behind something else, or exposes it directly, has
+no such backstop, and a stranded slot can live indefinitely. A WS
+ping/pong heartbeat in the route itself is the correct fix — it would let
+the server detect and release a dead peer regardless of what, if
+anything, sits in front of it. It is deliberately out of scope here,
+tracked as follow-up work.
 
 ## Alternatives rejected
 

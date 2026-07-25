@@ -445,12 +445,12 @@ Expected: PASS, 4 tests.
 - [ ] **Step 7: Run the whole logs suite unmodified**
 
 Run: `cd server && npx vitest run test/logs-routes.test.ts test/logs-send-gate.test.ts test/logs-stream-registry.test.ts`
-Expected: PASS — 12 pre-existing route tests, 9 send-gate tests, 6 registry tests, 4 new cap tests. If a pre-existing route test needed editing to pass, stop: the cap changed normal-path behavior and the wiring is wrong.
+Expected: PASS — 12 pre-existing route tests, 10 send-gate tests, 6 registry tests, 4 new cap tests. If a pre-existing route test needed editing to pass, stop: the cap changed normal-path behavior and the wiring is wrong.
 
 - [ ] **Step 8: Run the full server suite, typecheck, and lint**
 
 Run: `cd server && npm test && npm run typecheck && npm run lint`
-Expected: all pass, no warnings. The pre-existing suite was 192 tests; expect 202.
+Expected: all pass, no warnings. The pre-existing suite was 192 tests; expect 204 (203 once this task's work landed, plus the one further slot-release test added in the subsequent code-review fix pass).
 
 - [ ] **Step 9: Document the cap in the README**
 

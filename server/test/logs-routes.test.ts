@@ -334,4 +334,15 @@ describe("concurrent stream cap", () => {
 
     expect(mocked.streamContainerLogs).toHaveBeenCalledTimes(6);
   });
+
+  it("frees the slot when the stream fails to open", async () => {
+    mockLogStreamPerCall();
+    await openMany(4);
+    mocked.streamContainerLogs.mockRejectedValueOnce(new Error("boom"));
+
+    await onClose(await openSocket("c4"));
+    await openSocket("c5");
+
+    expect(mocked.streamContainerLogs).toHaveBeenCalledTimes(6);
+  });
 });
