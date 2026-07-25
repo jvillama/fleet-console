@@ -77,20 +77,40 @@ function openLogStream(id, cookie) {
       10_000,
     );
 
-    req.on("upgrade", (res, socket) => {
+    req.on("upgrade", (res, socket, head) => {
       if (res.statusCode !== 101) {
         clearTimeout(timer);
         socket.destroy();
         reject(new Error(`upgrade returned ${res.statusCode}, expected 101`));
         return;
       }
-      socket.once("data", (buf) => {
+      // The 'upgrade' event's head buffer holds any bytes the HTTP parser
+      // already consumed off the socket before this event fired. On
+      // loopback, a chatty container's first WS frame often arrives in the
+      // same TCP delivery as the handshake tail and lands here, not in a
+      // later 'data' event — missing it would time out on a stack that is
+      // actually fine. A frame header could likewise, in principle, be
+      // split across two deliveries, so accumulate until at least 2 bytes
+      // (enough to read the opcode) are in hand rather than trusting the
+      // first chunk to be whole.
+      let buffered = head && head.length ? head : Buffer.alloc(0);
+
+      function settle() {
         clearTimeout(timer);
         socket.destroy();
         // Deliberately not decoding the payload length header: a log line
         // over 125 bytes switches to the extended-length encoding, and the
         // raw byte count answers "did content arrive" without that branch.
-        resolve({ opcode: buf[0] & 0x0f, bytes: buf.length, raw: buf });
+        resolve({ opcode: buffered[0] & 0x0f, bytes: buffered.length, raw: buffered });
+      }
+
+      if (buffered.length >= 2) {
+        settle();
+        return;
+      }
+      socket.on("data", (chunk) => {
+        buffered = Buffer.concat([buffered, chunk]);
+        if (buffered.length >= 2) settle();
       });
     });
     req.on("response", (res) => {
