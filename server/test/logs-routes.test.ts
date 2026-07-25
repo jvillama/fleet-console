@@ -166,6 +166,55 @@ describe("GET /api/logs/:id (websocket)", () => {
     ws.close();
   });
 
+  // The three tests below pin the port half of the origin comparison. The
+  // check shipped with only portless coverage (host "console.test"), which
+  // is why a proxy that dropped the port went unnoticed and broke every
+  // real upgrade for eleven days.
+  it("allows a same-origin upgrade whose authority carries a port", async () => {
+    mockLogStream();
+
+    const ws = await openSocket("abc123", {
+      host: "localhost:8080",
+      origin: "http://localhost:8080",
+    });
+    await vi.waitFor(() => expect(auditPage().total).toBe(1));
+
+    expect(auditPage().events[0]).toMatchObject({ outcome: "success" });
+    ws.close();
+  });
+
+  it("rejects when the proxy strips the port from Host", async () => {
+    mockLogStream();
+
+    // The signature of nginx `proxy_set_header Host $host` (which drops the
+    // port) in front of a console served on :8080. The server is right to
+    // reject this — the proxy must forward $http_host instead.
+    const ws = await openSocket("abc123", {
+      host: "localhost",
+      origin: "http://localhost:8080",
+    });
+    const closed = await onClose(ws);
+
+    expect(closed).toEqual({ code: 1008, reason: "Origin not allowed" });
+    expect(mocked.streamContainerLogs).not.toHaveBeenCalled();
+  });
+
+  it("rejects when only the port differs", async () => {
+    mockLogStream();
+
+    // A different port is a different origin. Guards against anyone
+    // "fixing" a proxy misconfiguration by relaxing this check to compare
+    // hostnames only.
+    const ws = await openSocket("abc123", {
+      host: "localhost:8080",
+      origin: "http://localhost:9999",
+    });
+    const closed = await onClose(ws);
+
+    expect(closed).toEqual({ code: 1008, reason: "Origin not allowed" });
+    expect(mocked.streamContainerLogs).not.toHaveBeenCalled();
+  });
+
   it("audits the stream open with actor, target, and ip", async () => {
     mockLogStream();
 
