@@ -28,7 +28,7 @@ audited fail-open.
 - The stream key is exactly `user?.username ?? request.ip`, matching `rateLimitFor`'s `keyGenerator` in `server/src/ratelimit.ts:87`.
 - The rejection audit is **fail-open** — use the existing `auditFailOpen` helper. Do not make this route fail closed.
 - Registry state is created **inside `logsRoutes(app)`**, never at module scope. Module-level mutable state survives across Vitest files and would fail the next file's first open (the trap the rate-limit dedupe map hit).
-- The existing tests in `server/test/logs-routes.test.ts` must stay green **without editing any existing test body or assertion**. Adding a new helper function and new `describe` blocks to that file is expected and fine.
+- The existing tests in `server/test/logs-routes.test.ts` must stay green **without editing any existing test body or assertion**. Adding new helpers and new `describe` blocks is expected and fine, as is refactoring the *internals* of the existing `openSocket` helper — provided its signature and every existing call site are unchanged.
 - No `server/src/types.ts` change, so `node scripts/sync-types.mjs` must not be needed and the CI `contract` job is unaffected. No dependency change, so no lockfile regeneration.
 - Do not touch `server/src/docker.ts`, the `LogStream` interface, `createSendGate`, or anything in `web/`.
 
@@ -216,7 +216,7 @@ Wires the registry into the handler, proves it end-to-end, and documents it.
 
 **Files:**
 - Modify: `server/src/routes/logs.ts` (`logsRoutes`, lines 131-210 before Task 1's insertion shifts them)
-- Modify: `server/test/logs-routes.test.ts` (add a helper and a new `describe`; do not edit existing tests)
+- Modify: `server/test/logs-routes.test.ts` (generalize the `openSocket` helper's internals, add helpers, add a new `describe`; do not edit existing test bodies)
 - Modify: `README.md` (one paragraph after the backpressure paragraph at lines 144-147)
 
 **Interfaces:**
@@ -225,20 +225,54 @@ Wires the registry into the handler, proves it end-to-end, and documents it.
 
 - [ ] **Step 1: Write the failing tests**
 
-Add to `server/test/logs-routes.test.ts`. First a helper, next to the
-existing `openSocket` (line 43) — deliberately standalone rather than
-folded into `openSocket`, so that helper's signature and its existing call
-sites stay untouched:
+Add to `server/test/logs-routes.test.ts`.
+
+First, generalize the existing `openSocket` (line 43) to take a session,
+by extracting its body into `openSocketAs` and having `openSocket`
+delegate. **`openSocket`'s own signature and every existing call site stay
+exactly as they are** — only its internals move. Move both of the existing
+explanatory comments (the cookie-encoding one and the `socket:` one) into
+`openSocketAs` verbatim; they explain the code that moved, not the
+wrapper. Replace the whole existing `openSocket` function with:
 
 ```ts
-/** Like openSocket, but for an arbitrary session (the cap is per user). */
-function openSocketAs(session: string, id: string) {
+/**
+ * Opens a log stream as an arbitrary session. The cap is per user, so a
+ * test that needs a second user calls this directly; openSocket wraps it
+ * for the common case of the session beforeEach logged in.
+ */
+function openSocketAs(
+  session: string,
+  id: string,
+  extraHeaders: Record<string, string> = {},
+) {
+  // cookies.session is the *decoded* value (set-cookie-parser undoes the
+  // percent-encoding @fastify/cookie applies on the wire); injectWS's raw
+  // headers option doesn't re-encode for us the way app.inject({ cookies })
+  // does, so we must encode it ourselves to survive the Cookie header's
+  // own ";"-separated parsing (secure-session's cipher;nonce value contains
+  // a literal ";").
   return app.injectWS(`/api/logs/${id}`, {
-    headers: { cookie: `session=${encodeURIComponent(session)}` },
+    headers: {
+      cookie: `session=${encodeURIComponent(session)}`,
+      ...extraHeaders,
+    },
+    // A real upgrade gets req.socket for free from Node's HTTP server;
+    // injectWS's fake request doesn't set one, and request.ip (used by the
+    // audit call) reads raw.socket.remoteAddress under trustProxy — supply
+    // it so the handler runs the same way it would in production.
     socket: { remoteAddress: "127.0.0.1" } as import("node:net").Socket,
   });
 }
 
+function openSocket(id = "abc123", extraHeaders: Record<string, string> = {}) {
+  return openSocketAs(cookies.session, id, extraHeaders);
+}
+```
+
+Then the remaining new helpers:
+
+```ts
 /**
  * A fresh PassThrough per call, unlike mockLogStream's single shared one:
  * these tests hold several streams open at once, and closing one socket
