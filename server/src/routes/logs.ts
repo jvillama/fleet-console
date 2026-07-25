@@ -122,6 +122,54 @@ export function createSendGate(socket: SendTarget): {
   };
 }
 
+/** Concurrent log streams a single user may hold open at once. */
+const MAX_STREAMS_PER_USER = 5;
+
+/**
+ * Per-user cap on open log streams. createSendGate bounds what one stream
+ * can cost us (1 MiB of queued frames); this bounds how many of those one
+ * user can hold, so aggregate exposure is roster × cap × 1 MiB rather than
+ * something that grows with connection count.
+ *
+ * tryAcquire hands back a release closure rather than exposing a
+ * release(key) method: a caller cannot free a slot it never took, and the
+ * closure guards its own idempotency, so the route can wire release to
+ * several teardown paths without double-counting. Counts are deleted at
+ * zero, so the map tracks users currently streaming rather than everyone
+ * who ever has.
+ *
+ * One registry per Fastify instance — created in logsRoutes, never module
+ * scope. A module-level counter survives across test files and would fail
+ * the next file's first open.
+ */
+export function createStreamRegistry(): {
+  tryAcquire: (key: string) => (() => void) | null;
+  /** Keys with at least one open stream; lets tests prove slots are freed. */
+  readonly size: number;
+} {
+  const open = new Map<string, number>();
+
+  return {
+    get size() {
+      return open.size;
+    },
+    tryAcquire(key) {
+      const count = open.get(key) ?? 0;
+      if (count >= MAX_STREAMS_PER_USER) return null;
+      open.set(key, count + 1);
+
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        const current = open.get(key) ?? 0;
+        if (current <= 1) open.delete(key);
+        else open.set(key, current - 1);
+      };
+    },
+  };
+}
+
 /**
  * Live container logs over WebSocket. Session required via the global gate
  * (the cookie rides the upgrade request). One fail-open audit event per
@@ -129,6 +177,10 @@ export function createSendGate(socket: SendTarget): {
  * served and the stream then ends.
  */
 export function logsRoutes(app: FastifyInstance): void {
+  // Per Fastify instance, not module scope: tests build a fresh app per
+  // case, and a module-level counter would survive across them.
+  const streams = createStreamRegistry();
+
   app.get<{ Params: { id: string } }>(
     "/api/logs/:id",
     { websocket: true },
@@ -158,10 +210,34 @@ export function logsRoutes(app: FastifyInstance): void {
         return;
       }
 
+      const release = streams.tryAcquire(user?.username ?? request.ip);
+      if (release === null) {
+        auditFailOpen(request, {
+          actor: user?.username ?? "unknown",
+          role: user?.role ?? null,
+          action: "container.logs",
+          outcome: "failure",
+          target: id,
+          ip: request.ip,
+          detail: `concurrent log stream limit reached (${MAX_STREAMS_PER_USER})`,
+        });
+        socket.close(
+          1013,
+          `Too many concurrent log streams (max ${MAX_STREAMS_PER_USER})`,
+        );
+        return;
+      }
+      // Covers every normal teardown — client disconnect, stream end (1000),
+      // stream error (1011). The two explicit release() calls below cover the
+      // paths where "close" may already have fired and will never fire again.
+      // release() is idempotent, so the overlap is harmless.
+      socket.on("close", release);
+
       let logs;
       try {
         logs = await streamContainerLogs(id, { tail: 200 });
       } catch (err) {
+        release();
         auditFailOpen(request, {
           actor: user?.username ?? "unknown",
           role: user?.role ?? null,
@@ -185,7 +261,16 @@ export function logsRoutes(app: FastifyInstance): void {
       });
 
       if (socket.readyState !== socket.OPEN) {
-        // Client vanished while the stream was opening.
+        // Client vanished while the stream was opening. If the socket closed
+        // before this handler body ran, the "close" listener registered
+        // above never fires again — this explicit release() is the only
+        // thing that returns the slot. That timing can't be exercised
+        // through @fastify/websocket's injectWS test harness (its fake
+        // socket pair only fires a server-side "close" via .terminate(),
+        // and this code path always runs before a test could call that), so
+        // don't delete this call as dead code just because coverage can't
+        // reach it.
+        release();
         logs.close();
         return;
       }

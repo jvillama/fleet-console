@@ -146,6 +146,13 @@ falls far enough behind that its send queue passes 1 MiB, the server drops
 lines until the queue drains, then emits a `⚠ N lines dropped (slow
 client)` line in the stream. The panel keeps the last 2000 lines anyway.
 
+One user may hold at most **5 log streams open at once**. A further open is
+closed immediately with code `1013` and a reason naming the cap, and the
+rejection is audited. Together with the per-stream 1 MiB ceiling above, that
+bounds what one user's log streams can hold in queued log frames at 5 MiB —
+a slot stranded by a client that vanishes without closing cleanly still
+clears on its own within an hour, via the bundled proxy's read timeout.
+
 ## Roadmap
 
 - [x] **Phase 1 — visibility:** container list, states, CPU/memory, overview strip

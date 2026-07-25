@@ -40,7 +40,16 @@ function mockLogStream() {
   return { stream, close };
 }
 
-function openSocket(id = "abc123", extraHeaders: Record<string, string> = {}) {
+/**
+ * Opens a log stream as an arbitrary session. The cap is per user, so a
+ * test that needs a second user calls this directly; openSocket wraps it
+ * for the common case of the session beforeEach logged in.
+ */
+function openSocketAs(
+  session: string,
+  id: string,
+  extraHeaders: Record<string, string> = {},
+) {
   // cookies.session is the *decoded* value (set-cookie-parser undoes the
   // percent-encoding @fastify/cookie applies on the wire); injectWS's raw
   // headers option doesn't re-encode for us the way app.inject({ cookies })
@@ -49,7 +58,7 @@ function openSocket(id = "abc123", extraHeaders: Record<string, string> = {}) {
   // a literal ";").
   return app.injectWS(`/api/logs/${id}`, {
     headers: {
-      cookie: `session=${encodeURIComponent(cookies.session)}`,
+      cookie: `session=${encodeURIComponent(session)}`,
       ...extraHeaders,
     },
     // A real upgrade gets req.socket for free from Node's HTTP server;
@@ -58,6 +67,32 @@ function openSocket(id = "abc123", extraHeaders: Record<string, string> = {}) {
     // it so the handler runs the same way it would in production.
     socket: { remoteAddress: "127.0.0.1" } as import("node:net").Socket,
   });
+}
+
+function openSocket(id = "abc123", extraHeaders: Record<string, string> = {}) {
+  return openSocketAs(cookies.session, id, extraHeaders);
+}
+
+/**
+ * A fresh PassThrough per call, unlike mockLogStream's single shared one:
+ * these tests hold several streams open at once, and closing one socket
+ * must not destroy another's source.
+ */
+function mockLogStreamPerCall(): PassThrough[] {
+  const streams: PassThrough[] = [];
+  mocked.streamContainerLogs.mockImplementation(() => {
+    const stream = new PassThrough();
+    streams.push(stream);
+    return Promise.resolve({ stream, close: () => void stream.destroy() });
+  });
+  return streams;
+}
+
+/** Opens `count` streams for the logged-in user, ids c0…c(count-1). */
+async function openMany(count: number) {
+  const sockets: Awaited<ReturnType<typeof openSocket>>[] = [];
+  for (let i = 0; i < count; i += 1) sockets.push(await openSocket(`c${i}`));
+  return sockets;
 }
 
 function onClose(ws: Awaited<ReturnType<typeof openSocket>>) {
@@ -235,5 +270,79 @@ describe("GET /api/logs/:id (websocket)", () => {
     ws.terminate();
 
     await vi.waitFor(() => expect(close).toHaveBeenCalled());
+  });
+});
+
+describe("concurrent stream cap", () => {
+  it("closes the sixth concurrent stream with 1013 without touching Docker", async () => {
+    mockLogStreamPerCall();
+    await openMany(5);
+    expect(mocked.streamContainerLogs).toHaveBeenCalledTimes(5);
+
+    const closed = await onClose(await openSocket("c5"));
+
+    expect(closed).toEqual({
+      code: 1013,
+      reason: "Too many concurrent log streams (max 5)",
+    });
+    expect(mocked.streamContainerLogs).toHaveBeenCalledTimes(5);
+  });
+
+  it("audits the rejected stream as a failure", async () => {
+    mockLogStreamPerCall();
+    await openMany(5);
+
+    await onClose(await openSocket("c5"));
+
+    await vi.waitFor(() => expect(auditPage().total).toBe(6));
+    const failures = auditPage().events.filter((e) => e.outcome === "failure");
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({
+      actor: "alice",
+      action: "container.logs",
+      outcome: "failure",
+      target: "c5",
+      detail: "concurrent log stream limit reached (5)",
+    });
+  });
+
+  it("admits a new stream once an open one closes", async () => {
+    const streams = mockLogStreamPerCall();
+    const sockets = await openMany(5);
+
+    // .close() (graceful) doesn't propagate a server-side "close" event in
+    // this fake socket pair (see the note on "closes the docker stream when
+    // the client disconnects" above); .terminate() does.
+    sockets[0]?.terminate();
+    // The route registers release() on the server socket's "close" before
+    // the listener that calls logs.close(), so once the first source is
+    // destroyed the slot is already free.
+    await vi.waitFor(() => expect(streams[0]?.destroyed).toBe(true));
+
+    await openSocket("c5");
+
+    expect(mocked.streamContainerLogs).toHaveBeenCalledTimes(6);
+  });
+
+  it("caps each user separately", async () => {
+    mockLogStreamPerCall();
+    await openMany(5);
+    expect((await onClose(await openSocket("c5"))).code).toBe(1013);
+
+    const bob = await loginAs(app, "bob", "battery staple");
+    await openSocketAs(bob.session, "c9");
+
+    expect(mocked.streamContainerLogs).toHaveBeenCalledTimes(6);
+  });
+
+  it("frees the slot when the stream fails to open", async () => {
+    mockLogStreamPerCall();
+    await openMany(4);
+    mocked.streamContainerLogs.mockRejectedValueOnce(new Error("boom"));
+
+    await onClose(await openSocket("c4"));
+    await openSocket("c5");
+
+    expect(mocked.streamContainerLogs).toHaveBeenCalledTimes(6);
   });
 });
