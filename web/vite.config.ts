@@ -12,7 +12,11 @@ export default defineConfig({
     proxy: {
       "/api": {
         target: process.env.VITE_API_TARGET ?? "http://localhost:4000",
-        changeOrigin: true,
+        // Keep the browser's Host (localhost:5173) instead of rewriting it
+        // to the target's. The logs route's same-origin check compares Host
+        // against the browser's Origin; changeOrigin: true made those
+        // disagree and every WebSocket upgrade was rejected.
+        changeOrigin: false,
         ws: true,
       },
     },
