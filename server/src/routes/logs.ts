@@ -122,6 +122,54 @@ export function createSendGate(socket: SendTarget): {
   };
 }
 
+/** Concurrent log streams a single user may hold open at once. */
+const MAX_STREAMS_PER_USER = 5;
+
+/**
+ * Per-user cap on open log streams. createSendGate bounds what one stream
+ * can cost us (1 MiB of queued frames); this bounds how many of those one
+ * user can hold, so aggregate exposure is roster × cap × 1 MiB rather than
+ * something that grows with connection count.
+ *
+ * tryAcquire hands back a release closure rather than exposing a
+ * release(key) method: a caller cannot free a slot it never took, and the
+ * closure guards its own idempotency, so the route can wire release to
+ * several teardown paths without double-counting. Counts are deleted at
+ * zero, so the map tracks users currently streaming rather than everyone
+ * who ever has.
+ *
+ * One registry per Fastify instance — created in logsRoutes, never module
+ * scope. A module-level counter survives across test files and would fail
+ * the next file's first open.
+ */
+export function createStreamRegistry(): {
+  tryAcquire: (key: string) => (() => void) | null;
+  /** Keys with at least one open stream; lets tests prove slots are freed. */
+  readonly size: number;
+} {
+  const open = new Map<string, number>();
+
+  return {
+    get size() {
+      return open.size;
+    },
+    tryAcquire(key) {
+      const count = open.get(key) ?? 0;
+      if (count >= MAX_STREAMS_PER_USER) return null;
+      open.set(key, count + 1);
+
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        const current = open.get(key) ?? 0;
+        if (current <= 1) open.delete(key);
+        else open.set(key, current - 1);
+      };
+    },
+  };
+}
+
 /**
  * Live container logs over WebSocket. Session required via the global gate
  * (the cookie rides the upgrade request). One fail-open audit event per
