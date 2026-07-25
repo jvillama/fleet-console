@@ -177,6 +177,10 @@ export function createStreamRegistry(): {
  * served and the stream then ends.
  */
 export function logsRoutes(app: FastifyInstance): void {
+  // Per Fastify instance, not module scope: tests build a fresh app per
+  // case, and a module-level counter would survive across them.
+  const streams = createStreamRegistry();
+
   app.get<{ Params: { id: string } }>(
     "/api/logs/:id",
     { websocket: true },
@@ -206,10 +210,34 @@ export function logsRoutes(app: FastifyInstance): void {
         return;
       }
 
+      const release = streams.tryAcquire(user?.username ?? request.ip);
+      if (release === null) {
+        auditFailOpen(request, {
+          actor: user?.username ?? "unknown",
+          role: user?.role ?? null,
+          action: "container.logs",
+          outcome: "failure",
+          target: id,
+          ip: request.ip,
+          detail: `concurrent log stream limit reached (${MAX_STREAMS_PER_USER})`,
+        });
+        socket.close(
+          1013,
+          `Too many concurrent log streams (max ${MAX_STREAMS_PER_USER})`,
+        );
+        return;
+      }
+      // Covers every normal teardown — client disconnect, stream end (1000),
+      // stream error (1011). The two explicit release() calls below cover the
+      // paths where "close" may already have fired and will never fire again.
+      // release() is idempotent, so the overlap is harmless.
+      socket.on("close", release);
+
       let logs;
       try {
         logs = await streamContainerLogs(id, { tail: 200 });
       } catch (err) {
+        release();
         auditFailOpen(request, {
           actor: user?.username ?? "unknown",
           role: user?.role ?? null,
@@ -234,6 +262,7 @@ export function logsRoutes(app: FastifyInstance): void {
 
       if (socket.readyState !== socket.OPEN) {
         // Client vanished while the stream was opening.
+        release();
         logs.close();
         return;
       }
