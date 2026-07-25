@@ -113,7 +113,10 @@ export function createSendGate(socket: SendTarget): {
       socket.send(line);
     },
     finish() {
-      // Task 2 fills this in.
+      if (dropped === 0) return;
+      if (socket.readyState !== socket.OPEN) return;
+      socket.send(`⚠ ${dropped} lines dropped (slow client)`);
+      dropped = 0;
     },
   };
 }

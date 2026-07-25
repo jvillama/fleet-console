@@ -94,4 +94,38 @@ describe("createSendGate", () => {
 
     expect(socket.sent).toEqual(["still fine"]);
   });
+
+  it("finish() reports a pending count even with a deep queue", () => {
+    const socket = fakeSocket();
+    const gate = createSendGate(socket);
+
+    socket.bufferedAmount = HIGH_WATER + 1;
+    gate.send("a");
+    gate.send("b");
+    gate.finish();
+
+    expect(socket.sent).toEqual(["⚠ 2 lines dropped (slow client)"]);
+  });
+
+  it("finish() is a no-op when nothing was dropped", () => {
+    const socket = fakeSocket();
+    const gate = createSendGate(socket);
+
+    gate.send("all delivered");
+    gate.finish();
+
+    expect(socket.sent).toEqual(["all delivered"]);
+  });
+
+  it("finish() is silent when the socket is not OPEN", () => {
+    const socket = fakeSocket();
+    const gate = createSendGate(socket);
+
+    socket.bufferedAmount = HIGH_WATER + 1;
+    gate.send("dropped");
+    socket.readyState = 3; // CLOSED
+    gate.finish();
+
+    expect(socket.sent).toEqual([]);
+  });
 });
