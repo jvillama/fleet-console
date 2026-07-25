@@ -205,15 +205,29 @@ passthrough, and the WebSocket upgrade — untested. `scripts/smoke.mjs`
 covers that seam against a running stack:
 
 ```bash
-cp .env.smoke .env && docker compose up -d --build
+docker compose --env-file .env.smoke up -d --build
 node scripts/smoke.mjs
+docker compose --env-file .env.smoke down -v
 ```
+
+Never `cp .env.smoke .env` — `.env` is gitignored and holds your real
+credentials, and copying over it is unrecoverable. `--env-file` replaces
+`.env` for compose's variable interpolation without touching the file, but
+every subsequent `docker compose` invocation against this stack needs the
+same flag (interpolation otherwise fails), which is why the `down` line
+above carries it too.
 
 It checks that the SPA is served, that login sets a session cookie through
 the proxy, that the API lists the demo fleet, and that the log stream
 delivers a real text frame rather than an immediate close. Override
 `SMOKE_BASE_URL`, `SMOKE_USER`, and `SMOKE_PASSWORD` to point it at another
-stack. CI runs this on every PR and blocks image publishing on it.
+stack. Login is rate-limited to 5/minute per IP (see API table below), so
+running the script more than five times in a minute fails check 2 with a
+429 — space out repeated runs. CI runs this on every PR and blocks image
+publishing on it; blocking *merges* on a red smoke job additionally
+requires `smoke` to be added to this repository's branch-protection
+required status checks, which is a GitHub setting, not something any file
+here configures.
 
 ## Security notes
 

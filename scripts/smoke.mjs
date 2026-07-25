@@ -25,6 +25,15 @@ function ok(step, detail) {
   console.log(`ok: ${step}${detail ? ` — ${detail}` : ""}`);
 }
 
+if (!port) {
+  fail(
+    "config",
+    `SMOKE_BASE_URL (${BASE}) has no explicit port. The Host/Origin check this ` +
+      `script exists to make passes trivially on a default port, so check 4 ` +
+      `would prove nothing. Point it at a stack with an explicit port.`,
+  );
+}
+
 /** Plain HTTP request. Resolves { status, headers, body }. */
 function request(path, { method = "GET", headers = {}, body } = {}) {
   return new Promise((resolve, reject) => {
@@ -90,9 +99,12 @@ function openLogStream(id, cookie) {
       // same TCP delivery as the handshake tail and lands here, not in a
       // later 'data' event — missing it would time out on a stack that is
       // actually fine. A frame header could likewise, in principle, be
-      // split across two deliveries, so accumulate until at least 2 bytes
-      // (enough to read the opcode) are in hand rather than trusting the
-      // first chunk to be whole.
+      // split across two deliveries, so accumulate until at least 3 bytes
+      // are in hand rather than trusting the first chunk to be whole: 2
+      // bytes is enough to read the opcode, but a frame that happened to be
+      // exactly a 2-byte header would then look indistinguishable from "no
+      // payload" to the caller's bytes <= 2 check below, so wait for one
+      // more byte to prove a payload exists.
       let buffered = head && head.length ? head : Buffer.alloc(0);
 
       function settle() {
@@ -104,13 +116,13 @@ function openLogStream(id, cookie) {
         resolve({ opcode: buffered[0] & 0x0f, bytes: buffered.length, raw: buffered });
       }
 
-      if (buffered.length >= 2) {
+      if (buffered.length >= 3) {
         settle();
         return;
       }
       socket.on("data", (chunk) => {
         buffered = Buffer.concat([buffered, chunk]);
-        if (buffered.length >= 2) settle();
+        if (buffered.length >= 3) settle();
       });
     });
     req.on("response", (res) => {
