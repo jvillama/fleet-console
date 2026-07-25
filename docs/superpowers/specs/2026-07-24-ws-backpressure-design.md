@@ -117,7 +117,10 @@ would otherwise die unreported. The `end` handler calls
 `finish()` sends the pending notice unconditionally — ignoring the
 thresholds, since nothing more is coming — and is a no-op when nothing
 was dropped. `ws.close()` queues behind pending data, so the frame still
-reaches the client.
+reaches the client — but only within the close timeout: `ws` arms a
+30-second timer on server sockets and destroys them with anything still
+queued once it fires, so a client slow enough to be sitting on a full
+1 MiB queue can still lose the notice.
 
 ### Deliberate non-behaviors
 

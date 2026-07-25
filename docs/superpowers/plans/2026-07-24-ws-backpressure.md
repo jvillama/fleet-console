@@ -270,8 +270,8 @@ git commit -m "feat: drop log lines when the client send queue is deep"
 If the docker stream ends while the gate is suppressed, the pending count
 would never be reported. `finish()` ignores the thresholds — nothing more
 is coming, so there is no queue to protect — but still respects
-`readyState`, because `ws.send()` on a closed socket raises rather than
-no-ops.
+`readyState`, to avoid inflating the sender's buffered-byte accounting
+by writing to a socket that has already closed.
 
 - [ ] **Step 1: Write the failing tests**
 

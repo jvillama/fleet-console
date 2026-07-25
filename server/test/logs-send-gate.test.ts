@@ -52,6 +52,16 @@ describe("createSendGate", () => {
     expect(socket.sent).toEqual([]);
   });
 
+  it("suppresses at exactly the high-water mark", () => {
+    const socket = fakeSocket();
+    const gate = createSendGate(socket);
+
+    socket.bufferedAmount = HIGH_WATER;
+    gate.send("right at the mark");
+
+    expect(socket.sent).toEqual([]);
+  });
+
   it("stays suppressed while the queue sits between the marks", () => {
     const socket = fakeSocket();
     const gate = createSendGate(socket);

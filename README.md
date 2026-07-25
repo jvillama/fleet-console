@@ -143,7 +143,7 @@ Reads are unlimited.
 
 Log streams are lossy under backpressure rather than unbounded: if a client
 falls far enough behind that its send queue passes 1 MiB, the server drops
-lines until the queue drains, then emits a single `⚠ N lines dropped (slow
+lines until the queue drains, then emits a `⚠ N lines dropped (slow
 client)` line in the stream. The panel keeps the last 2000 lines anyway.
 
 ## Roadmap

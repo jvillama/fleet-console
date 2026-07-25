@@ -82,7 +82,7 @@ interface SendTarget {
  * Bounds the memory one slow client can cost us. `socket.send()` never
  * blocks — ws queues the frame and reports the backlog in bufferedAmount —
  * so a container logging faster than a client drains grows that queue
- * without limit. Above HIGH_WATER we stop sending and count the loss;
+ * without limit. At or above HIGH_WATER we stop sending and count the loss;
  * once the queue drains under LOW_WATER we resume and report the gap
  * in-band. Two marks rather than one: a client hovering at a single
  * threshold would emit a notice on nearly every line.
@@ -117,6 +117,7 @@ export function createSendGate(socket: SendTarget): {
       if (socket.readyState !== socket.OPEN) return;
       socket.send(`⚠ ${dropped} lines dropped (slow client)`);
       dropped = 0;
+      suppressed = false;
     },
   };
 }
@@ -198,6 +199,9 @@ export function logsRoutes(app: FastifyInstance): void {
         socket.close(1000, "stream ended");
       });
       logs.stream.on("error", (err: Error) => {
+        // Deliberately not calling gate.finish() here: the 1011 close reason
+        // already tells the client the stream failed, which is more useful
+        // than a pending drop count on a connection that's closing anyway.
         socket.close(1011, closeReason(err));
       });
       socket.on("close", () => logs.close());
