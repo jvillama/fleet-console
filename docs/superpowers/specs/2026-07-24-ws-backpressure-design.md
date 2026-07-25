@@ -87,10 +87,14 @@ of the high-water mark.
 ### Send rules
 
 - `readyState !== OPEN` → do nothing. Unchanged from today.
-- **Suppressed and `bufferedAmount >= LOW_WATER`** → increment `dropped`,
+- **`bufferedAmount >= LOW_WATER` while suppressed** → increment `dropped`,
   return.
-- **Not suppressed and `bufferedAmount > HIGH_WATER`** → set `suppressed`,
-  increment `dropped`, return.
+- **`bufferedAmount >= HIGH_WATER` while not suppressed** → set
+  `suppressed`, increment `dropped`, return.
+
+Both are the same comparison against a mark that depends on the state, so
+the implementation is one branch: `socket.bufferedAmount >= (suppressed ?
+LOW_WATER : HIGH_WATER)`.
 - **Otherwise** → clear `suppressed`; if `dropped > 0`, send the notice
   frame first and reset the count; then send the line.
 
