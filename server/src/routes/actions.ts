@@ -11,6 +11,7 @@ import {
 } from "../docker.js";
 import { recordEvent, updateEventOutcome } from "../audit.js";
 import { requireRole } from "../authz.js";
+import { rateLimitFor } from "../ratelimit.js";
 import type {
   ApiError,
   AuditOutcome,
@@ -27,6 +28,9 @@ import type {
 
 // Container ids are hex; names are alphanumeric with ._- (same as stats).
 const ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
+
+/** Generous for a human clicking buttons; stops scripted hammering. */
+const ACTIONS_PER_MINUTE = 20;
 
 type ActionRequest = FastifyRequest<{ Params: { id: string } }>;
 
@@ -63,6 +67,9 @@ function registerAction(
   app.post<{ Params: { id: string } }>(
     `/api/containers/:id/${action}`,
     {
+      config: {
+        rateLimit: rateLimitFor(`container.${action}`, ACTIONS_PER_MINUTE),
+      },
       preHandler: [
         validateId,
         requireRole("operator", { action: `container.${action}` }),

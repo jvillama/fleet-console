@@ -134,6 +134,13 @@ with pagination and `actor`/`action` filters.
 | `GET /api/deployments/:id` | session | One deployment's status |
 | `GET /api/deployments?container=` | session | Deployment history for a container name |
 
+Mutating routes are rate-limited **per user** (the session username, not the
+IP, so operators behind one NAT don't starve each other): 20/minute for
+start/stop/restart, 6/minute each for deploy and rollback, and 5/minute per
+IP for login. Over budget returns `429` with a `Retry-After` header and the
+usual `{error, detail}` body; the first throttle in a window is audited.
+Reads are unlimited.
+
 ## Roadmap
 
 - [x] **Phase 1 — visibility:** container list, states, CPU/memory, overview strip
@@ -179,8 +186,10 @@ Mounting the Docker socket into a container is equivalent to root on the
 host. Phase 1 mounted it read-only; Phase 2 (container actions) mounts it
 read-write, so the console itself is now a high-value target. Mitigations:
 every mutating route requires an operator or admin session (viewers are
-read-only), and every action attempt is audited **fail-closed** — if the
-audit write fails, the action is refused with a 503. One deliberate
+read-only), every action attempt is audited **fail-closed** — if the
+audit write fails, the action is refused with a 503 — and every mutating
+route carries a per-user rate limit, so a stolen session cookie can't drive
+unbounded container churn. One deliberate
 footgun: the console can stop its own containers from its own dashboard,
 exactly as `docker stop` could; there is no self-protection guard, so
 operators should treat the fleet-console rows with the same care as a
