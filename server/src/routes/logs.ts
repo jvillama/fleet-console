@@ -189,12 +189,12 @@ export function logsRoutes(app: FastifyInstance): void {
         return;
       }
 
-      const forwarder = createLineForwarder((line) => {
-        if (socket.readyState === socket.OPEN) socket.send(line);
-      });
+      const gate = createSendGate(socket);
+      const forwarder = createLineForwarder((line) => gate.send(line));
       logs.stream.on("data", (chunk: Buffer) => forwarder.push(chunk));
       logs.stream.on("end", () => {
         forwarder.flush();
+        gate.finish();
         socket.close(1000, "stream ended");
       });
       logs.stream.on("error", (err: Error) => {

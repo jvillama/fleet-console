@@ -141,6 +141,11 @@ IP for login. Over budget returns `429` with a `Retry-After` header and the
 usual `{error, detail}` body; the first throttle in a window is audited.
 Reads are unlimited.
 
+Log streams are lossy under backpressure rather than unbounded: if a client
+falls far enough behind that its send queue passes 1 MiB, the server drops
+lines until the queue drains, then emits a single `⚠ N lines dropped (slow
+client)` line in the stream. The panel keeps the last 2000 lines anyway.
+
 ## Roadmap
 
 - [x] **Phase 1 — visibility:** container list, states, CPU/memory, overview strip
