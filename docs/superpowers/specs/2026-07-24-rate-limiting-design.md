@@ -166,6 +166,21 @@ against one app instance, so the new limits cannot break them.
 - an audit write that throws on the 429 path still returns 429 (fail-open,
   no 500)
 
+## Implementation notes
+
+Three details settled while building it:
+
+- The dedupe map is created **inside** `rateLimitFor`, one per limiter,
+  rather than in module scope. Each route already keeps its own counter, so
+  the state belongs with it — and module-scope state would have leaked
+  between tests that build fresh apps.
+- The plugin `throw`s whatever `errorResponseBuilder` returns and never sets
+  the reply code itself; Fastify reads `statusCode` off the thrown value but
+  serializes a plain object as-is. The field is therefore attached
+  non-enumerable, so the 429 body stays exactly `{error, detail}`.
+- `deploy` and `rollback` get 6/minute **each** (separate routes, separate
+  counters), not 6/minute shared.
+
 ## Out of scope
 
 - Read routes stay unlimited.

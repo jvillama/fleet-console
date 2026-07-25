@@ -3,6 +3,7 @@ import { recordEvent, updateEventOutcome, updateEventTarget } from "../audit.js"
 import { requireRole } from "../authz.js";
 import { requestDeploy } from "../deploy.js";
 import { getDeployment, queryDeployments } from "../deployments.js";
+import { rateLimitFor } from "../ratelimit.js";
 import type {
   ApiError,
   AuditOutcome,
@@ -21,6 +22,12 @@ import type {
 const ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 // Docker tag grammar: word char start, then word chars, dots, dashes.
 const TAG_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$/;
+
+// Much tighter than container actions: every deploy pulls an image,
+// recreates a container and runs a health watch. Still far above any
+// realistic human deploy cadence, and the per-container single-flight
+// guard (409) already covers concurrency.
+const DEPLOYS_PER_MINUTE = 6;
 
 function settleAudit(
   request: FastifyRequest,
@@ -64,6 +71,9 @@ export function deploymentsRoutes(app: FastifyInstance): void {
   app.post<{ Params: { id: string }; Body: DeployRequest }>(
     "/api/containers/:id/deploy",
     {
+      config: {
+        rateLimit: rateLimitFor("container.deploy", DEPLOYS_PER_MINUTE),
+      },
       preHandler: [
         async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
           if (!ID_PATTERN.test(request.params.id)) {
@@ -116,7 +126,12 @@ export function deploymentsRoutes(app: FastifyInstance): void {
 
   app.post<{ Params: { id: string } }>(
     "/api/deployments/:id/rollback",
-    { preHandler: [requireRole("admin", { action: "container.rollback" })] },
+    {
+      config: {
+        rateLimit: rateLimitFor("container.rollback", DEPLOYS_PER_MINUTE),
+      },
+      preHandler: [requireRole("admin", { action: "container.rollback" })],
+    },
     async (request, reply) => {
       const depId = Number(request.params.id);
       if (!Number.isInteger(depId) || depId < 1) {
