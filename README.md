@@ -197,6 +197,24 @@ are unset. Two caveats: point it only at an HTTPS console
 self-deploy footgun) — the run may report a timeout even though the deploy
 succeeded.
 
+### Smoke tests
+
+`server/` and `web/` are unit-tested in isolation, which leaves the
+assembled product — nginx's SPA fallback, `/api` forwarding, session-cookie
+passthrough, and the WebSocket upgrade — untested. `scripts/smoke.mjs`
+covers that seam against a running stack:
+
+```bash
+cp .env.smoke .env && docker compose up -d --build
+node scripts/smoke.mjs
+```
+
+It checks that the SPA is served, that login sets a session cookie through
+the proxy, that the API lists the demo fleet, and that the log stream
+delivers a real text frame rather than an immediate close. Override
+`SMOKE_BASE_URL`, `SMOKE_USER`, and `SMOKE_PASSWORD` to point it at another
+stack. CI runs this on every PR and blocks image publishing on it.
+
 ## Security notes
 
 Mounting the Docker socket into a container is equivalent to root on the
