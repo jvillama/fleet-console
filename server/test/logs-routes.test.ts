@@ -413,8 +413,10 @@ describe("heartbeat", () => {
     const streams = mockLogStreamPerCall();
     const sockets = await openMany(5);
 
-    // A genuine half-open peer: pausing the client's socket stops it
-    // reading the ping, so ws never sends the automatic pong.
+    // A genuine half-open peer: this injected client never auto-pongs
+    // without an explicit on("ping") handler (unlike a browser, which
+    // answers inside the WebSocket stack) — pause() additionally stops it
+    // from even reading the ping frame at the transport level.
     sockets[0]?.pause();
 
     await vi.advanceTimersByTimeAsync(INTERVAL); // ping goes out
