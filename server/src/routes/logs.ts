@@ -376,6 +376,22 @@ export function logsRoutes(app: FastifyInstance): void {
         socket.close(1011, closeReason(err));
       });
       socket.on("close", () => logs.close());
+
+      // Created only once the stream is genuinely live — after the origin
+      // check, the cap check, the Docker call, and the vanished-client early
+      // return. Logged, not audited: a missed pong is a network fact (a shut
+      // laptop, a train tunnel), not an authorization decision, and a row per
+      // closed lid would dilute the audit page. The open above is audited, so
+      // the stream is still traceable.
+      const heartbeat = createHeartbeat(socket, {
+        onTimeout: () =>
+          request.log.info(
+            { target: id, actor: user?.username ?? "unknown" },
+            "log stream heartbeat timeout",
+          ),
+      });
+      socket.on("pong", () => heartbeat.pong());
+      socket.on("close", () => heartbeat.stop());
     },
   );
 }
