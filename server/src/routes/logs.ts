@@ -240,8 +240,15 @@ export function createHeartbeat(
     }
     if (awaitingPong) {
       stop();
-      onTimeout?.();
-      socket.terminate();
+      // A throwing onTimeout must not cost the socket its only remaining
+      // detector: without the finally, terminate() would never run and the
+      // dead peer would strand its stream slot and 1 MiB budget forever —
+      // precisely the failure this branch exists to prevent.
+      try {
+        onTimeout?.();
+      } finally {
+        socket.terminate();
+      }
       return;
     }
     awaitingPong = true;

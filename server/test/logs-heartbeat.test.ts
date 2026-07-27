@@ -115,6 +115,7 @@ describe("createHeartbeat", () => {
     vi.advanceTimersByTime(INTERVAL * 5);
 
     expect(socket.calls).toEqual({ pings: 0, terminates: 0 });
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("never pings a socket that is not OPEN", () => {
@@ -125,6 +126,7 @@ describe("createHeartbeat", () => {
     vi.advanceTimersByTime(INTERVAL * 5);
 
     expect(socket.calls).toEqual({ pings: 0, terminates: 0 });
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("stops rather than terminating a socket that closed while awaiting a pong", () => {
@@ -141,6 +143,7 @@ describe("createHeartbeat", () => {
     vi.advanceTimersByTime(INTERVAL * 5);
 
     expect(socket.calls.terminates).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("honors a custom intervalMs", () => {

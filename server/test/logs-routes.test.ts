@@ -456,6 +456,9 @@ describe("heartbeat", () => {
     vi.useFakeTimers();
     const streams = mockLogStreamPerCall();
     const sockets = await openMany(1);
+    // pause() makes this a genuine half-open peer at the transport level,
+    // not just a harness quirk (injectWS's client has no autoPong option to
+    // begin with) — that's what keeps this test faithful to the real bug.
     sockets[0]?.pause();
 
     await vi.advanceTimersByTimeAsync(INTERVAL * 2);
