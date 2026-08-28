@@ -170,6 +170,99 @@ export function createStreamRegistry(): {
   };
 }
 
+/** How often an open log-stream socket is pinged. */
+const PING_INTERVAL_MS = 30_000;
+
+/** The slice of a ws WebSocket the heartbeat needs. */
+interface HeartbeatTarget {
+  readonly readyState: number;
+  readonly OPEN: number;
+  ping: () => void;
+  terminate: () => void;
+}
+
+/**
+ * Liveness for one log stream. A peer that vanishes without a close frame
+ * (slept laptop, dropped Wi-Fi, killed browser) otherwise holds its stream
+ * slot and its 1 MiB frame budget indefinitely: the socket never emits
+ * "close", so `release` never runs. The data path cannot detect it either —
+ * createSendGate stops sending once bufferedAmount passes HIGH_WATER, which
+ * is exactly the state a dead peer produces, so the only per-line dead-peer
+ * signal switches itself off precisely when it would fire. Before this, the
+ * sole bound was nginx's `proxy_read_timeout 1h`, which does not exist
+ * outside the bundled proxy.
+ *
+ * One interval and one flag, the standard ws `isAlive` pattern: a tick with
+ * last tick's ping still unanswered means the peer is gone. Detection
+ * therefore lands between one and two intervals after the peer goes silent
+ * — 30 to 60 seconds, not a flat 60. An exact deadline would need a second
+ * timer per socket to arm and clear on every teardown path, which is not
+ * worth it for a bound whose only requirement is minutes rather than hours.
+ *
+ * `terminate()` rather than `close()`: a close handshake needs a peer that
+ * can answer, and this peer by definition cannot — `close()` would park the
+ * socket in CLOSING until ws's own close timeout. terminate() destroys it
+ * now and emits "close" (1006), which runs the route's existing release and
+ * logs.close() listeners, so the heartbeat adds no teardown path of its own.
+ *
+ * Pings bypass createSendGate deliberately: gate suppression is the very
+ * state in which nothing else touches the socket. An empty ping is a 2-byte
+ * frame and cannot perturb the gate's 256 KiB / 1 MiB hysteresis.
+ *
+ * The interval is not unref()'d — a leaked timer should hang loudly rather
+ * than be masked. Its lifetime is owned by stop() and the route's "close"
+ * listener.
+ */
+export function createHeartbeat(
+  socket: HeartbeatTarget,
+  {
+    intervalMs = PING_INTERVAL_MS,
+    onTimeout,
+  }: { intervalMs?: number; onTimeout?: () => void } = {},
+): { pong: () => void; stop: () => void } {
+  let awaitingPong = false;
+  let timer: NodeJS.Timeout | null = null;
+
+  const stop = (): void => {
+    if (timer === null) return;
+    clearInterval(timer);
+    timer = null;
+  };
+
+  timer = setInterval(() => {
+    // ws's ping() throws on a CONNECTING socket and silently no-ops on a
+    // CLOSING/CLOSED one, so this guard comes first. It also means a socket
+    // that closed while awaiting a pong is simply dropped, not terminated:
+    // its own "close" event already owns the teardown.
+    if (socket.readyState !== socket.OPEN) {
+      stop();
+      return;
+    }
+    if (awaitingPong) {
+      stop();
+      // A throwing onTimeout must not cost the socket its only remaining
+      // detector: without the finally, terminate() would never run and the
+      // dead peer would strand its stream slot and 1 MiB budget forever —
+      // precisely the failure this branch exists to prevent.
+      try {
+        onTimeout?.();
+      } finally {
+        socket.terminate();
+      }
+      return;
+    }
+    awaitingPong = true;
+    socket.ping();
+  }, intervalMs);
+
+  return {
+    pong: () => {
+      awaitingPong = false;
+    },
+    stop,
+  };
+}
+
 /**
  * Live container logs over WebSocket. Session required via the global gate
  * (the cookie rides the upgrade request). One fail-open audit event per
@@ -290,6 +383,22 @@ export function logsRoutes(app: FastifyInstance): void {
         socket.close(1011, closeReason(err));
       });
       socket.on("close", () => logs.close());
+
+      // Created only once the stream is genuinely live — after the origin
+      // check, the cap check, the Docker call, and the vanished-client early
+      // return. Logged, not audited: a missed pong is a network fact (a shut
+      // laptop, a train tunnel), not an authorization decision, and a row per
+      // closed lid would dilute the audit page. The open above is audited, so
+      // the stream is still traceable.
+      const heartbeat = createHeartbeat(socket, {
+        onTimeout: () =>
+          request.log.info(
+            { target: id, actor: user?.username ?? "unknown" },
+            "log stream heartbeat timeout",
+          ),
+      });
+      socket.on("pong", () => heartbeat.pong());
+      socket.on("close", () => heartbeat.stop());
     },
   );
 }

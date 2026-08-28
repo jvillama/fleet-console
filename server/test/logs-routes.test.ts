@@ -395,3 +395,85 @@ describe("concurrent stream cap", () => {
     expect(mocked.streamContainerLogs).toHaveBeenCalledTimes(6);
   });
 });
+
+describe("heartbeat", () => {
+  const INTERVAL = 30_000;
+
+  afterEach(() => {
+    // Restore before the outer afterEach calls app.close(), which should
+    // never run under fake timers.
+    vi.useRealTimers();
+  });
+
+  it("terminates a peer that stops answering pings and frees its slot", async () => {
+    // Installed before the sockets exist: the heartbeat's interval is
+    // created at open, and a real interval ignores fake timers installed
+    // after the fact.
+    vi.useFakeTimers();
+    const streams = mockLogStreamPerCall();
+    const sockets = await openMany(5);
+
+    // A genuine half-open peer: this injected client never auto-pongs
+    // without an explicit on("ping") handler (unlike a browser, which
+    // answers inside the WebSocket stack) — pause() additionally stops it
+    // from even reading the ping frame at the transport level.
+    sockets[0]?.pause();
+
+    await vi.advanceTimersByTimeAsync(INTERVAL); // ping goes out
+    await vi.advanceTimersByTimeAsync(INTERVAL); // no pong -> terminate
+    vi.useRealTimers();
+
+    // terminate() emits "close", which runs the route's existing release
+    // and logs.close() listeners — the destroyed source proves both ran.
+    await vi.waitFor(() => expect(streams[0]?.destroyed).toBe(true));
+
+    // The real proof: the user was at the cap of 5, so a sixth open can
+    // only reach Docker if the stranded slot came back.
+    await openSocket("c5");
+    expect(mocked.streamContainerLogs).toHaveBeenCalledTimes(6);
+  });
+
+  it("leaves a client that answers pings alone", async () => {
+    vi.useFakeTimers();
+    const streams = mockLogStreamPerCall();
+    const client = await openSocket("c0");
+    // injectWS's client is built with a null address and no autoPong option
+    // (ws/lib/websocket.js:90), so unlike a browser — which answers ping
+    // inside the WebSocket stack — it never replies on its own. Answer
+    // explicitly, so this test exercises the server's pong handling rather
+    // than ws's client defaults.
+    client.on("ping", () => client.pong());
+
+    for (let i = 0; i < 4; i += 1) {
+      await vi.advanceTimersByTimeAsync(INTERVAL);
+    }
+    vi.useRealTimers();
+
+    expect(streams[0]?.destroyed).toBe(false);
+  });
+
+  it("does not audit a heartbeat timeout", async () => {
+    vi.useFakeTimers();
+    const streams = mockLogStreamPerCall();
+    const sockets = await openMany(1);
+    // pause() makes this a genuine half-open peer at the transport level,
+    // not just a harness quirk (injectWS's client has no autoPong option to
+    // begin with) — that's what keeps this test faithful to the real bug.
+    sockets[0]?.pause();
+
+    await vi.advanceTimersByTimeAsync(INTERVAL * 2);
+    vi.useRealTimers();
+
+    await vi.waitFor(() => expect(streams[0]?.destroyed).toBe(true));
+
+    // Exactly the one success row for the open. A dropped network is a
+    // network fact, not an authorization decision.
+    const page = auditPage();
+    expect(page.total).toBe(1);
+    expect(page.events[0]).toMatchObject({
+      action: "container.logs",
+      outcome: "success",
+      target: "c0",
+    });
+  });
+});
